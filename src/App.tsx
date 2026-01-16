@@ -5,11 +5,24 @@ import { ProjectList } from "./components/ProjectList";
 import { CreateProject } from "./components/CreateProject";
 import { SetupScreen } from "./components/SetupScreen";
 import { SplitPane } from "./components/SplitPane";
+import { GitHubButton } from "./components/GitHubButton";
 import { checkPrerequisites, startDevServer, Prerequisite, Project, DevServerHandle } from "./lib/project";
+import {
+  checkGitHubCliStatus,
+  getGitHubUsername,
+  getProjectGitHubStatus,
+  GitHubCliStatus,
+  ProjectGitHubStatus,
+} from "./lib/github";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
 type AppView = "loading" | "setup" | "projects" | "create" | "workspace";
+
+export interface GitHubState {
+  cliStatus: GitHubCliStatus;
+  username: string | null;
+}
 
 function App() {
   const [view, setView] = useState<AppView>("loading");
@@ -18,7 +31,14 @@ function App() {
   const [isClosing, setIsClosing] = useState(false);
   const devServerRef = useRef<DevServerHandle | null>(null);
 
-  // Check prerequisites on mount
+  // GitHub state
+  const [githubState, setGithubState] = useState<GitHubState>({
+    cliStatus: { installed: false, authenticated: false },
+    username: null,
+  });
+  const [projectGithubStatus, setProjectGithubStatus] = useState<ProjectGitHubStatus | null>(null);
+
+  // Check prerequisites and GitHub status on mount
   useEffect(() => {
     checkSetup();
   }, []);
@@ -28,6 +48,18 @@ function App() {
     try {
       const prereqs = await checkPrerequisites();
       setPrerequisites(prereqs);
+
+      // Check GitHub status in parallel
+      const ghStatus = await checkGitHubCliStatus();
+      let username: string | null = null;
+      if (ghStatus.authenticated) {
+        try {
+          username = await getGitHubUsername();
+        } catch {
+          // Ignore - username is optional
+        }
+      }
+      setGithubState({ cliStatus: ghStatus, username });
 
       const allAvailable = prereqs.every((p) => p.available);
       if (allAvailable) {
@@ -41,8 +73,29 @@ function App() {
     }
   };
 
+  const refreshGitHubStatus = async () => {
+    const ghStatus = await checkGitHubCliStatus();
+    let username: string | null = null;
+    if (ghStatus.authenticated) {
+      try {
+        username = await getGitHubUsername();
+      } catch {
+        // Ignore
+      }
+    }
+    setGithubState({ cliStatus: ghStatus, username });
+  };
+
   const handleSelectProject = async (project: Project) => {
     setCurrentProject(project);
+
+    // Check project's GitHub status
+    try {
+      const status = await getProjectGitHubStatus(project.path);
+      setProjectGithubStatus(status);
+    } catch {
+      setProjectGithubStatus(null);
+    }
 
     // Start dev server in background
     try {
@@ -84,8 +137,17 @@ function App() {
       devServerRef.current = null;
     }
     setCurrentProject(null);
+    setProjectGithubStatus(null);
     setIsClosing(false);
     setView("projects");
+  };
+
+  const handleGitHubStatusChange = async () => {
+    // Refresh project GitHub status after push/publish
+    if (currentProject) {
+      const status = await getProjectGitHubStatus(currentProject.path);
+      setProjectGithubStatus(status);
+    }
   };
 
   if (view === "loading") {
@@ -111,6 +173,8 @@ function App() {
         <ProjectList
           onSelectProject={handleSelectProject}
           onCreateProject={handleCreateProject}
+          githubState={githubState}
+          onGitHubConnect={refreshGitHubStatus}
         />
       </div>
     );
@@ -140,6 +204,17 @@ function App() {
         </button>
         <h1>{currentProject?.name}</h1>
         <span className="project-path">{currentProject?.path}</span>
+
+        <div className="workspace-header-actions">
+          <GitHubButton
+            githubState={githubState}
+            projectStatus={projectGithubStatus}
+            projectPath={currentProject?.path || ""}
+            projectName={currentProject?.name || ""}
+            onStatusChange={handleGitHubStatusChange}
+            onGitHubConnect={refreshGitHubStatus}
+          />
+        </div>
       </header>
 
       <div className="workspace-content">

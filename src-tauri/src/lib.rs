@@ -1,13 +1,14 @@
+use headless_chrome::{Browser, LaunchOptions};
 use parking_lot::Mutex;
-use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize, Child};
-use serde::Serialize;
+use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
+use std::process::Command;
 use std::sync::Arc;
 use std::thread;
-use tauri::{AppHandle, Emitter, State};
-use headless_chrome::{Browser, LaunchOptions};
 use std::time::Duration;
+use tauri::{AppHandle, Emitter, State};
 
 struct PtySession {
     master: Box<dyn MasterPty + Send>,
@@ -465,6 +466,368 @@ async fn get_project_thumbnail(project_path: String) -> Result<Option<String>, S
     }
 }
 
+// ============ GitHub Integration ============
+
+#[derive(Serialize)]
+struct GitHubCliStatus {
+    installed: bool,
+    authenticated: bool,
+}
+
+#[tauri::command]
+async fn check_github_cli_status() -> GitHubCliStatus {
+    // Check if gh CLI is installed
+    let installed = which::which("gh").is_ok();
+
+    if !installed {
+        return GitHubCliStatus {
+            installed: false,
+            authenticated: false,
+        };
+    }
+
+    // Check if authenticated
+    let authenticated = Command::new("gh")
+        .args(["auth", "status"])
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false);
+
+    GitHubCliStatus {
+        installed,
+        authenticated,
+    }
+}
+
+#[tauri::command]
+async fn get_github_username() -> Result<String, String> {
+    let output = Command::new("gh")
+        .args(["api", "user", "--jq", ".login"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err("Failed to get GitHub username".to_string());
+    }
+
+    let username = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Ok(username)
+}
+
+#[derive(Serialize)]
+struct ProjectGitHubStatus {
+    is_git_repo: bool,
+    has_remote: bool,
+    github_repo: Option<String>,  // e.g., "username/repo-name"
+    github_url: Option<String>,   // e.g., "https://github.com/username/repo-name"
+}
+
+#[tauri::command]
+async fn get_project_github_status(project_path: String) -> ProjectGitHubStatus {
+    let project = std::path::Path::new(&project_path);
+    let git_dir = project.join(".git");
+
+    // Check if it's a git repo
+    if !git_dir.exists() {
+        return ProjectGitHubStatus {
+            is_git_repo: false,
+            has_remote: false,
+            github_repo: None,
+            github_url: None,
+        };
+    }
+
+    // Check for GitHub remote
+    let output = Command::new("git")
+        .args(["remote", "-v"])
+        .current_dir(&project_path)
+        .output();
+
+    match output {
+        Ok(output) => {
+            let remotes = String::from_utf8_lossy(&output.stdout);
+
+            // Look for github.com in remotes
+            if remotes.contains("github.com") {
+                // Extract repo name from remote URL
+                // Handles both HTTPS and SSH formats:
+                // https://github.com/user/repo.git
+                // git@github.com:user/repo.git
+                let repo = remotes.lines()
+                    .find(|line| line.contains("github.com") && line.contains("(push)"))
+                    .and_then(|line| {
+                        // Try HTTPS format first
+                        if let Some(start) = line.find("github.com/") {
+                            let rest = &line[start + 11..];
+                            let end = rest.find(".git").unwrap_or(rest.find(' ').unwrap_or(rest.len()));
+                            return Some(rest[..end].to_string());
+                        }
+                        // Try SSH format
+                        if let Some(start) = line.find("github.com:") {
+                            let rest = &line[start + 11..];
+                            let end = rest.find(".git").unwrap_or(rest.find(' ').unwrap_or(rest.len()));
+                            return Some(rest[..end].to_string());
+                        }
+                        None
+                    });
+
+                let github_url = repo.as_ref().map(|r| format!("https://github.com/{}", r));
+
+                ProjectGitHubStatus {
+                    is_git_repo: true,
+                    has_remote: true,
+                    github_repo: repo,
+                    github_url,
+                }
+            } else {
+                ProjectGitHubStatus {
+                    is_git_repo: true,
+                    has_remote: false,
+                    github_repo: None,
+                    github_url: None,
+                }
+            }
+        }
+        Err(_) => ProjectGitHubStatus {
+            is_git_repo: true,
+            has_remote: false,
+            github_repo: None,
+            github_url: None,
+        },
+    }
+}
+
+#[tauri::command]
+async fn init_git_repo(project_path: String) -> Result<(), String> {
+    // Initialize git repo
+    let output = Command::new("git")
+        .args(["init"])
+        .current_dir(&project_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    // Stage all files
+    let output = Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(&project_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    // Create initial commit
+    let output = Command::new("git")
+        .args(["commit", "-m", "Initial commit from MarOS"])
+        .current_dir(&project_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn check_git_has_changes(project_path: String) -> Result<bool, String> {
+    let project = std::path::Path::new(&project_path);
+    let git_dir = project.join(".git");
+
+    // Not a git repo = no changes to track
+    if !git_dir.exists() {
+        return Ok(false);
+    }
+
+    // Check for uncommitted changes (staged or unstaged)
+    let status = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(&project_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let has_uncommitted = !String::from_utf8_lossy(&status.stdout).trim().is_empty();
+
+    if has_uncommitted {
+        return Ok(true);
+    }
+
+    // Check for unpushed commits
+    let unpushed = Command::new("git")
+        .args(["log", "@{u}..", "--oneline"])
+        .current_dir(&project_path)
+        .output();
+
+    // If this fails (no upstream), check if there are any commits at all
+    match unpushed {
+        Ok(output) => {
+            let has_unpushed = !String::from_utf8_lossy(&output.stdout).trim().is_empty();
+            Ok(has_unpushed)
+        }
+        Err(_) => {
+            // No upstream set, check if we have commits
+            let commits = Command::new("git")
+                .args(["log", "--oneline", "-1"])
+                .current_dir(&project_path)
+                .output()
+                .map_err(|e| e.to_string())?;
+
+            Ok(!String::from_utf8_lossy(&commits.stdout).trim().is_empty())
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PushToGitHubOptions {
+    project_path: String,
+    repo_name: String,
+    is_private: bool,
+}
+
+#[tauri::command]
+async fn push_to_github(options: PushToGitHubOptions) -> Result<String, String> {
+    let project_path = &options.project_path;
+    let repo_name = &options.repo_name;
+    let visibility = if options.is_private { "--private" } else { "--public" };
+
+    // Check if it's already a git repo, if not initialize
+    let git_dir = std::path::Path::new(project_path).join(".git");
+    if !git_dir.exists() {
+        init_git_repo(project_path.clone()).await?;
+    } else {
+        // Make sure all changes are committed
+        let _ = Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(project_path)
+            .output();
+
+        let status = Command::new("git")
+            .args(["status", "--porcelain"])
+            .current_dir(project_path)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !String::from_utf8_lossy(&status.stdout).trim().is_empty() {
+            let _ = Command::new("git")
+                .args(["commit", "-m", "Update from MarOS"])
+                .current_dir(project_path)
+                .output();
+        }
+    }
+
+    // Create GitHub repo and push
+    let output = Command::new("gh")
+        .args([
+            "repo", "create", repo_name,
+            visibility,
+            "--source", ".",
+            "--remote", "origin",
+            "--push",
+        ])
+        .current_dir(project_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(stderr.to_string());
+    }
+
+    // Return the repo URL
+    Ok(format!("https://github.com/{}", repo_name))
+}
+
+#[tauri::command]
+async fn publish_to_github(project_path: String, commit_message: Option<String>) -> Result<(), String> {
+    let message = commit_message.unwrap_or_else(|| "Update from MarOS".to_string());
+
+    // Get current branch name
+    let branch_output = Command::new("git")
+        .args(["branch", "--show-current"])
+        .current_dir(&project_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let branch = String::from_utf8_lossy(&branch_output.stdout).trim().to_string();
+    let branch = if branch.is_empty() { "main".to_string() } else { branch };
+
+    // Pull latest changes first (rebase to keep history clean)
+    let pull_output = Command::new("git")
+        .args(["pull", "--rebase", "origin", &branch])
+        .current_dir(&project_path)
+        .output();
+
+    // Ignore pull errors (might be first push, or no tracking branch yet)
+    if let Ok(output) = pull_output {
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // Only fail if it's not a "no tracking" or "couldn't find remote" error
+            if !stderr.contains("no tracking")
+                && !stderr.contains("Couldn't find remote ref")
+                && !stderr.contains("There is no tracking information") {
+                // Log but don't fail - we'll try to push anyway
+            }
+        }
+    }
+
+    // Stage all changes
+    let output = Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(&project_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    // Check if there are changes to commit
+    let status = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(&project_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let has_changes = !String::from_utf8_lossy(&status.stdout).trim().is_empty();
+
+    if has_changes {
+        // Commit changes
+        let output = Command::new("git")
+            .args(["commit", "-m", &message])
+            .current_dir(&project_path)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+    }
+
+    // Push to origin
+    let output = Command::new("git")
+        .args(["push", "-u", "origin", &branch])
+        .current_dir(&project_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Check if it's a "nothing to push" situation (which isn't really an error)
+        if !stderr.contains("Everything up-to-date") {
+            return Err(stderr.to_string());
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -484,6 +847,14 @@ pub fn run() {
             delete_project,
             capture_project_thumbnail,
             get_project_thumbnail,
+            // GitHub integration
+            check_github_cli_status,
+            get_github_username,
+            get_project_github_status,
+            check_git_has_changes,
+            init_git_repo,
+            push_to_github,
+            publish_to_github,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

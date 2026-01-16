@@ -118,6 +118,19 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
 
       await waitForPtyExit(cloneId);
 
+      // Remove .git folder so project starts fresh (not connected to template repo)
+      writeLine("");
+      writeLine("Initializing project...");
+      const rmGitId = await invoke<number>("spawn_pty", {
+        cwd: projectPath,
+        command: "rm",
+        args: ["-rf", ".git"],
+        rows: 10,
+        cols: 80,
+      });
+
+      await waitForPtyExit(rmGitId);
+
       writeLine("");
       writeLine("Installing dependencies...");
 

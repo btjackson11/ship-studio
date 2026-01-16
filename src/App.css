@@ -776,3 +776,222 @@ button:hover {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* GitHub Integration - Project List */
+.project-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.github-status {
+  margin-left: auto;
+}
+
+.github-status-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+
+.github-status-btn.not-installed {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.github-status-btn.not-connected {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.github-status-btn svg {
+  flex-shrink: 0;
+}
+
+.github-status-connected {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.github-status-connected svg {
+  color: var(--success);
+}
+
+/* GitHub Integration - Workspace Header */
+.workspace-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.github-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+
+.github-button.github-install,
+.github-button.github-connect {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.github-button.github-install:hover,
+.github-button.github-connect:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+.github-button.github-create {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.github-button.github-create:hover {
+  background: var(--border);
+}
+
+.github-button.github-publish {
+  background: var(--success);
+  color: #1e1e1e;
+  font-weight: 600;
+}
+
+.github-button.github-publish:hover:not(:disabled) {
+  background: #5ed9d0;
+}
+
+.github-button.github-publish:disabled,
+.github-button.github-publish.disabled {
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.github-button.github-link {
+  padding: 6px 8px;
+  background: var(--bg-tertiary);
+}
+
+.github-button.github-link:hover {
+  background: var(--border);
+}
+
+.github-error {
+  color: var(--error);
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+/* GitHub Modal */
+.github-modal {
+  max-width: 440px;
+}
+
+.github-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.github-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.repo-name-input {
+  display: flex;
+  align-items: center;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.repo-name-input:focus-within {
+  border-color: var(--accent);
+}
+
+.repo-prefix {
+  padding: 10px 0 10px 12px;
+  color: var(--text-muted);
+  font-family: monospace;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.repo-name-input input {
+  flex: 1;
+  padding: 10px 12px 10px 0;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: monospace;
+  font-size: 14px;
+  outline: none;
+}
+
+.visibility-option {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.visibility-option:hover {
+  background: var(--border);
+}
+
+.visibility-option:has(input[type="radio"]:checked) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent);
+}
+
+.visibility-option input[type="radio"] {
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.visibility-option div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.visibility-option strong {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.visibility-option span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.github-form .github-error {
+  margin-left: 0;
+  margin-top: 8px;
+}

@@ -184,9 +184,15 @@ export function Terminal({ projectPath, onExit }: TerminalProps) {
     };
   }, [isReady, projectPath, onExit, cleanup]);
 
+  // Click to focus terminal
+  const handleClick = useCallback(() => {
+    terminalRef.current?.focus();
+  }, []);
+
   return (
     <div
       ref={containerRef}
+      onClick={handleClick}
       style={{
         width: "100%",
         height: "100%",
