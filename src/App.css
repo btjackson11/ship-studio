@@ -214,6 +214,101 @@ button:hover {
   color: var(--text-secondary);
 }
 
+/* Connections Dashboard */
+.connections-dashboard {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.connection-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 200px;
+  flex: 1;
+  max-width: 280px;
+}
+
+.connection-card.connected {
+  border-color: var(--success);
+  border-color: rgba(78, 205, 196, 0.3);
+}
+
+.connection-card.disconnected {
+  border-color: var(--border);
+}
+
+.connection-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  color: var(--text-secondary);
+}
+
+.connection-card.connected .connection-icon {
+  background: rgba(78, 205, 196, 0.15);
+  color: var(--success);
+}
+
+.connection-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.connection-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.connection-status {
+  font-size: 12px;
+  color: var(--success);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.connection-status.disconnected {
+  color: var(--text-muted);
+}
+
+.connection-action {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.connection-action:hover {
+  background: var(--border);
+  border-color: var(--text-muted);
+}
+
+.connection-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .project-list-actions {
   margin-bottom: 32px;
 }
@@ -655,7 +750,7 @@ button:hover {
   display: flex;
   gap: 4px;
   margin-left: auto;
-  margin-right: 12px;
+  margin-right: 0;
 }
 
 .breakpoint-btn {
@@ -867,6 +962,7 @@ button:hover {
   background: var(--success);
   color: #1e1e1e;
   font-weight: 600;
+  margin-left: auto;
 }
 
 .github-button.github-publish:hover:not(:disabled) {
@@ -994,4 +1090,203 @@ button:hover {
 .github-form .github-error {
   margin-left: 0;
   margin-top: 8px;
+}
+
+/* Vercel Integration - Workspace Header */
+.vercel-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+
+.vercel-button svg {
+  flex-shrink: 0;
+}
+
+.vercel-button.vercel-install,
+.vercel-button.vercel-connect {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.vercel-button.vercel-install:hover,
+.vercel-button.vercel-connect:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+.vercel-button.vercel-link {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.vercel-button.vercel-link:hover {
+  background: var(--border);
+}
+
+.vercel-button.vercel-live {
+  background: #000;
+  color: #fff;
+  font-weight: 600;
+}
+
+.vercel-button.vercel-live:hover {
+  background: #333;
+}
+
+.vercel-button.vercel-linked {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.vercel-button.vercel-disabled {
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.vercel-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.vercel-error {
+  color: var(--error);
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+/* Vercel Modal */
+.vercel-modal {
+  max-width: 480px;
+}
+
+.vercel-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.vercel-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.vercel-form input {
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+}
+
+.vercel-form input:focus {
+  border-color: var(--accent);
+}
+
+.vercel-github-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.vercel-github-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.vercel-github-repo {
+  font-family: monospace;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.vercel-github-note {
+  font-size: 12px;
+  color: var(--success);
+  margin-top: 4px;
+}
+
+.vercel-form .vercel-error {
+  margin-left: 0;
+  margin-top: 8px;
+}
+
+/* Vercel Login Output */
+.vercel-login-output {
+  margin-top: 16px;
+  padding: 12px;
+  background: #000;
+  border-radius: 8px;
+  font-family: 'JetBrainsMono NF', monospace;
+  font-size: 13px;
+  color: #fff;
+  height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.vercel-login-output .cursor {
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+.vercel-button.vercel-deploy {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.vercel-button.vercel-deploy:hover {
+  background: var(--border);
+}
+
+.vercel-button.vercel-deploying {
+  background: #000;
+  color: #fff;
+  cursor: wait;
+}
+
+.vercel-button.vercel-deploying .deploying-text {
+  animation: deployPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes deployPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.vercel-button.vercel-error-state {
+  background: #dc2626;
+  color: #fff;
+}
+
+.vercel-button.vercel-error-state:hover {
+  background: #b91c1c;
+}
+
+.vercel-error-inline {
+  color: #dc2626;
+  font-size: 12px;
+  margin-left: 8px;
+  cursor: pointer;
+  text-decoration: underline;
 }

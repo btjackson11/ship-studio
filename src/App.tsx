@@ -6,6 +6,7 @@ import { CreateProject } from "./components/CreateProject";
 import { SetupScreen } from "./components/SetupScreen";
 import { SplitPane } from "./components/SplitPane";
 import { GitHubButton } from "./components/GitHubButton";
+import { VercelButton } from "./components/VercelButton";
 import { checkPrerequisites, startDevServer, Prerequisite, Project, DevServerHandle } from "./lib/project";
 import {
   checkGitHubCliStatus,
@@ -14,6 +15,14 @@ import {
   GitHubCliStatus,
   ProjectGitHubStatus,
 } from "./lib/github";
+import {
+  checkVercelCliStatus,
+  getVercelUsername,
+  getProjectVercelStatus,
+  VercelCliStatus,
+  ProjectVercelStatus,
+} from "./lib/vercel";
+import { checkClaudeCliStatus, ClaudeCliStatus } from "./lib/claude";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
@@ -22,6 +31,15 @@ type AppView = "loading" | "setup" | "projects" | "create" | "workspace";
 export interface GitHubState {
   cliStatus: GitHubCliStatus;
   username: string | null;
+}
+
+export interface VercelState {
+  cliStatus: VercelCliStatus;
+  username: string | null;
+}
+
+export interface ClaudeState {
+  cliStatus: ClaudeCliStatus;
 }
 
 function App() {
@@ -38,6 +56,18 @@ function App() {
   });
   const [projectGithubStatus, setProjectGithubStatus] = useState<ProjectGitHubStatus | null>(null);
 
+  // Vercel state
+  const [vercelState, setVercelState] = useState<VercelState>({
+    cliStatus: { installed: false, authenticated: false },
+    username: null,
+  });
+  const [projectVercelStatus, setProjectVercelStatus] = useState<ProjectVercelStatus | null>(null);
+
+  // Claude state
+  const [claudeState, setClaudeState] = useState<ClaudeState>({
+    cliStatus: { installed: false, version: null },
+  });
+
   // Check prerequisites and GitHub status on mount
   useEffect(() => {
     checkSetup();
@@ -49,17 +79,35 @@ function App() {
       const prereqs = await checkPrerequisites();
       setPrerequisites(prereqs);
 
-      // Check GitHub status in parallel
-      const ghStatus = await checkGitHubCliStatus();
-      let username: string | null = null;
+      // Check GitHub, Vercel, and Claude status in parallel
+      const [ghStatus, vcStatus, clStatus] = await Promise.all([
+        checkGitHubCliStatus(),
+        checkVercelCliStatus(),
+        checkClaudeCliStatus(),
+      ]);
+
+      let ghUsername: string | null = null;
       if (ghStatus.authenticated) {
         try {
-          username = await getGitHubUsername();
+          ghUsername = await getGitHubUsername();
         } catch {
           // Ignore - username is optional
         }
       }
-      setGithubState({ cliStatus: ghStatus, username });
+      setGithubState({ cliStatus: ghStatus, username: ghUsername });
+
+      let vcUsername: string | null = null;
+      if (vcStatus.authenticated) {
+        try {
+          vcUsername = await getVercelUsername();
+        } catch {
+          // Ignore - username is optional
+        }
+      }
+      setVercelState({ cliStatus: vcStatus, username: vcUsername });
+
+      // Set Claude state
+      setClaudeState({ cliStatus: clStatus });
 
       const allAvailable = prereqs.every((p) => p.available);
       if (allAvailable) {
@@ -86,15 +134,38 @@ function App() {
     setGithubState({ cliStatus: ghStatus, username });
   };
 
+  const refreshVercelStatus = async () => {
+    const vcStatus = await checkVercelCliStatus();
+    let username: string | null = null;
+    if (vcStatus.authenticated) {
+      try {
+        username = await getVercelUsername();
+      } catch {
+        // Ignore
+      }
+    }
+    setVercelState({ cliStatus: vcStatus, username });
+  };
+
+  const refreshClaudeStatus = async () => {
+    const clStatus = await checkClaudeCliStatus();
+    setClaudeState({ cliStatus: clStatus });
+  };
+
   const handleSelectProject = async (project: Project) => {
     setCurrentProject(project);
 
-    // Check project's GitHub status
+    // Check project's GitHub and Vercel status in parallel
     try {
-      const status = await getProjectGitHubStatus(project.path);
-      setProjectGithubStatus(status);
+      const [ghStatus, vcStatus] = await Promise.all([
+        getProjectGitHubStatus(project.path).catch(() => null),
+        getProjectVercelStatus(project.path).catch(() => null),
+      ]);
+      setProjectGithubStatus(ghStatus);
+      setProjectVercelStatus(vcStatus);
     } catch {
       setProjectGithubStatus(null);
+      setProjectVercelStatus(null);
     }
 
     // Start dev server in background
@@ -138,15 +209,28 @@ function App() {
     }
     setCurrentProject(null);
     setProjectGithubStatus(null);
+    setProjectVercelStatus(null);
     setIsClosing(false);
     setView("projects");
   };
 
   const handleGitHubStatusChange = async () => {
-    // Refresh project GitHub status after push/publish
+    // Refresh project GitHub and Vercel status after push/publish
     if (currentProject) {
-      const status = await getProjectGitHubStatus(currentProject.path);
-      setProjectGithubStatus(status);
+      const [ghStatus, vcStatus] = await Promise.all([
+        getProjectGitHubStatus(currentProject.path).catch(() => null),
+        getProjectVercelStatus(currentProject.path).catch(() => null),
+      ]);
+      setProjectGithubStatus(ghStatus);
+      setProjectVercelStatus(vcStatus);
+    }
+  };
+
+  const handleVercelStatusChange = async () => {
+    // Refresh project Vercel status after linking
+    if (currentProject) {
+      const status = await getProjectVercelStatus(currentProject.path).catch(() => null);
+      setProjectVercelStatus(status);
     }
   };
 
@@ -174,7 +258,11 @@ function App() {
           onSelectProject={handleSelectProject}
           onCreateProject={handleCreateProject}
           githubState={githubState}
+          vercelState={vercelState}
+          claudeState={claudeState}
           onGitHubConnect={refreshGitHubStatus}
+          onVercelConnect={refreshVercelStatus}
+          onClaudeConnect={refreshClaudeStatus}
         />
       </div>
     );
@@ -208,11 +296,21 @@ function App() {
         <div className="workspace-header-actions">
           <GitHubButton
             githubState={githubState}
+            vercelState={vercelState}
             projectStatus={projectGithubStatus}
             projectPath={currentProject?.path || ""}
             projectName={currentProject?.name || ""}
             onStatusChange={handleGitHubStatusChange}
             onGitHubConnect={refreshGitHubStatus}
+          />
+          <VercelButton
+            vercelState={vercelState}
+            projectVercelStatus={projectVercelStatus}
+            projectGithubStatus={projectGithubStatus}
+            projectPath={currentProject?.path || ""}
+            projectName={currentProject?.name || ""}
+            onStatusChange={handleVercelStatusChange}
+            onVercelConnect={refreshVercelStatus}
           />
         </div>
       </header>

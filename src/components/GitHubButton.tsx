@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
-import { GitHubState } from "../App";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { GitHubState, VercelState } from "../App";
 import { ProjectGitHubStatus, pushToGitHub, publishToGitHub, checkGitHasChanges } from "../lib/github";
+import { linkToVercel } from "../lib/vercel";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 interface GitHubButtonProps {
   githubState: GitHubState;
+  vercelState?: VercelState;
   projectStatus: ProjectGitHubStatus | null;
   projectPath: string;
   projectName: string;
@@ -14,6 +16,7 @@ interface GitHubButtonProps {
 
 export function GitHubButton({
   githubState,
+  vercelState,
   projectStatus,
   projectPath,
   projectName,
@@ -27,7 +30,7 @@ export function GitHubButton({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
-  const [checkingChanges, setCheckingChanges] = useState(false);
+  const initialCheckDone = useRef(false);
 
   const { cliStatus, username } = githubState;
 
@@ -35,23 +38,24 @@ export function GitHubButton({
   const checkChanges = useCallback(async () => {
     if (!projectPath || !projectStatus?.has_remote) return;
 
-    setCheckingChanges(true);
     try {
       const changes = await checkGitHasChanges(projectPath);
       setHasChanges(changes);
     } catch (e) {
       console.error("Failed to check changes:", e);
-    } finally {
-      setCheckingChanges(false);
     }
   }, [projectPath, projectStatus?.has_remote]);
 
   useEffect(() => {
-    checkChanges();
+    // Initial check
+    if (!initialCheckDone.current && projectStatus?.has_remote) {
+      initialCheckDone.current = true;
+      checkChanges();
+    }
 
-    // Poll for changes every 5 seconds when connected to repo
+    // Poll for changes every 10 seconds when connected to repo (less frequent to reduce flicker)
     if (projectStatus?.has_remote) {
-      const interval = setInterval(checkChanges, 5000);
+      const interval = setInterval(checkChanges, 10000);
       return () => clearInterval(interval);
     }
   }, [checkChanges, projectStatus?.has_remote]);
@@ -95,23 +99,11 @@ export function GitHubButton({
     );
   }
 
-  // If project is connected to GitHub, show Publish button
+  // If project is connected to GitHub, show GitHub link and Publish button
   if (projectStatus?.has_remote && projectStatus?.github_repo) {
     return (
       <>
-        <button
-          className={`github-button github-publish ${!hasChanges ? 'disabled' : ''}`}
-          onClick={() => {
-            if (hasChanges) {
-              setShowPublishModal(true);
-              setError(null);
-            }
-          }}
-          disabled={!hasChanges || isLoading || checkingChanges}
-          title={hasChanges ? "Publish changes to GitHub" : "Up to date with GitHub"}
-        >
-          {isLoading ? "Publishing..." : checkingChanges ? "Checking..." : "Publish"}
-        </button>
+        {/* GitHub link on the left */}
         {projectStatus.github_url && (
           <button
             className="github-button github-link"
@@ -121,6 +113,20 @@ export function GitHubButton({
             <GitHubIcon />
           </button>
         )}
+        {/* Publish button pushed to the right */}
+        <button
+          className={`github-button github-publish ${!hasChanges ? 'disabled' : ''}`}
+          onClick={() => {
+            if (hasChanges) {
+              setShowPublishModal(true);
+              setError(null);
+            }
+          }}
+          disabled={!hasChanges || isLoading}
+          title={hasChanges ? "Publish changes to GitHub" : "Up to date with GitHub"}
+        >
+          {isLoading ? "Publishing..." : "Publish"}
+        </button>
 
         {/* Publish Confirmation Modal */}
         {showPublishModal && (
@@ -175,6 +181,7 @@ export function GitHubButton({
         }}
         title="Create GitHub repository"
       >
+        <GitHubIcon />
         Create Repo
       </button>
 
@@ -247,6 +254,20 @@ export function GitHubButton({
                       repoName: fullRepoName,
                       isPrivate,
                     });
+
+                    // Auto-connect to Vercel if authenticated
+                    if (vercelState?.cliStatus.authenticated) {
+                      try {
+                        await linkToVercel({
+                          projectPath,
+                          githubRepo: fullRepoName,
+                        });
+                      } catch (e) {
+                        // Log but don't block - Vercel connection is optional
+                        console.error("Failed to auto-connect to Vercel:", e);
+                      }
+                    }
+
                     setShowCreateModal(false);
                     onStatusChange();
                   } catch (e) {

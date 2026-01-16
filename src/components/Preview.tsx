@@ -229,6 +229,14 @@ export function Preview({ port = 3000, projectPath }: PreviewProps) {
           )}
         </div>
 
+        <button
+          className="preview-refresh"
+          onClick={handleRefresh}
+          title="Refresh preview"
+        >
+          ↻
+        </button>
+
         <div className="preview-breakpoints">
           {(Object.keys(BREAKPOINTS) as Breakpoint[]).map((bp) => (
             <button
@@ -241,13 +249,6 @@ export function Preview({ port = 3000, projectPath }: PreviewProps) {
             </button>
           ))}
         </div>
-        <button
-          className="preview-refresh"
-          onClick={handleRefresh}
-          title="Refresh preview"
-        >
-          ↻
-        </button>
       </div>
       <div className="preview-viewport">
         <iframe
