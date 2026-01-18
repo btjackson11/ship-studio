@@ -66,6 +66,7 @@ export function Preview({ port = 3000, projectPath, onServerReady }: PreviewProp
   const [isEditingZoom, setIsEditingZoom] = useState(false);
   const [pages, setPages] = useState<PageInfo[]>([]);
   const [currentPage, setCurrentPage] = useState("/");
+  const [hasSanity, setHasSanity] = useState(false);
   const [showPageDropdown, setShowPageDropdown] = useState(false);
   const [pageSearch, setPageSearch] = useState("");
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -97,6 +98,15 @@ export function Preview({ port = 3000, projectPath, onServerReady }: PreviewProp
     loadPages();
     const interval = setInterval(loadPages, PAGE_REFRESH_INTERVAL_MS);
     return () => clearInterval(interval);
+  }, [projectPath]);
+
+  // Check for Sanity CMS
+  useEffect(() => {
+    if (projectPath) {
+      invoke<boolean>('check_sanity_installed', { projectPath })
+        .then(setHasSanity)
+        .catch(() => setHasSanity(false));
+    }
   }, [projectPath]);
 
   // Close dropdown when clicking outside
@@ -269,6 +279,20 @@ export function Preview({ port = 3000, projectPath, onServerReady }: PreviewProp
         >
           ↻
         </button>
+
+        {hasSanity && (
+          <button
+            className="cms-button"
+            onClick={() => handlePageSelect('/studio')}
+            title="Open Sanity Studio"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M9 9h6v6H9z" />
+            </svg>
+            CMS
+          </button>
+        )}
 
         <div className="preview-breakpoints">
           {(Object.keys(BREAKPOINTS) as Breakpoint[]).map((bp) => (

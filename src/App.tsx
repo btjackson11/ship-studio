@@ -7,6 +7,7 @@ import { SetupScreen } from "./components/SetupScreen";
 import { SplitPane } from "./components/SplitPane";
 import { GitHubButton } from "./components/GitHubButton";
 import { VercelButton } from "./components/VercelButton";
+import { EnvEditor } from "./components/EnvEditor";
 import { checkPrerequisites, startDevServer, Prerequisite, Project, DevServerHandle } from "./lib/project";
 import {
   checkGitHubCliStatus,
@@ -77,6 +78,38 @@ function App() {
 
   // Editor mode (agent vs visual)
   const [editorMode, setEditorMode] = useState<EditorMode>("agent");
+
+  // Env editor modal
+  const [showEnvEditor, setShowEnvEditor] = useState(false);
+
+  // IDE dropdown
+  const [showIdeDropdown, setShowIdeDropdown] = useState(false);
+  const [ideAvailability, setIdeAvailability] = useState<{ vscode: boolean; cursor: boolean }>({ vscode: false, cursor: false });
+  const [openingIde, setOpeningIde] = useState<string | null>(null);
+
+  // Check IDE availability on mount
+  useEffect(() => {
+    invoke<{ vscode: boolean; cursor: boolean }>("check_ide_availability")
+      .then(setIdeAvailability)
+      .catch(() => setIdeAvailability({ vscode: false, cursor: false }));
+  }, []);
+
+  // Open project in IDE
+  const openInIde = async (ide: "vscode" | "cursor") => {
+    if (!currentProject) return;
+    setOpeningIde(ide);
+    try {
+      await invoke("open_in_ide", { projectPath: currentProject.path, ide });
+      // Brief delay to show "Opening..." then close dropdown
+      setTimeout(() => {
+        setOpeningIde(null);
+        setShowIdeDropdown(false);
+      }, 1000);
+    } catch (e) {
+      console.error(`Failed to open in ${ide}:`, e);
+      setOpeningIde(null);
+    }
+  };
 
   // Check prerequisites and GitHub status on mount
   useEffect(() => {
@@ -350,6 +383,52 @@ function App() {
         <span className="project-path">{currentProject?.path}</span>
 
         <div className="workspace-header-actions">
+          <div
+            className="ide-dropdown-container"
+            onMouseEnter={() => setShowIdeDropdown(true)}
+            onMouseLeave={() => setShowIdeDropdown(false)}
+          >
+            <button className="ide-button" title="Open in IDE">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+              </svg>
+            </button>
+            {showIdeDropdown && (
+              <div className="ide-dropdown">
+                {ideAvailability.vscode && (
+                  <button onClick={() => openInIde("vscode")} disabled={openingIde !== null}>
+                    <svg width="14" height="14" viewBox="0 0 32 32" fill="currentColor">
+                      <path d="M30.865 3.448l-6.583-3.167c-0.766-0.37-1.677-0.214-2.276 0.385l-12.609 11.505-5.495-4.167c-0.51-0.391-1.229-0.359-1.703 0.073l-1.76 1.604c-0.583 0.526-0.583 1.443-0.005 1.969l4.766 4.349-4.766 4.349c-0.578 0.526-0.578 1.443 0.005 1.969l1.76 1.604c0.479 0.432 1.193 0.464 1.703 0.073l5.495-4.172 12.615 11.51c0.594 0.599 1.505 0.755 2.271 0.385l6.589-3.172c0.693-0.333 1.13-1.031 1.13-1.802v-21.495c0-0.766-0.443-1.469-1.135-1.802zM24.005 23.266l-9.573-7.266 9.573-7.266z"/>
+                    </svg>
+                    {openingIde === "vscode" ? "Opening..." : "VS Code"}
+                  </button>
+                )}
+                {ideAvailability.cursor && (
+                  <button onClick={() => openInIde("cursor")} disabled={openingIde !== null}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd">
+                      <path d="M22.106 5.68L12.5.135a.998.998 0 00-.998 0L1.893 5.68a.84.84 0 00-.419.726v11.186c0 .3.16.577.42.727l9.607 5.547a.999.999 0 00.998 0l9.608-5.547a.84.84 0 00.42-.727V6.407a.84.84 0 00-.42-.726zm-.603 1.176L12.228 22.92c-.063.108-.228.064-.228-.061V12.34a.59.59 0 00-.295-.51l-9.11-5.26c-.107-.062-.063-.228.062-.228h18.55c.264 0 .428.286.296.514z"/>
+                    </svg>
+                    {openingIde === "cursor" ? "Opening..." : "Cursor"}
+                  </button>
+                )}
+                {!ideAvailability.vscode && !ideAvailability.cursor && (
+                  <div className="ide-dropdown-empty">No IDEs found</div>
+                )}
+              </div>
+            )}
+          </div>
+          <button
+            className="env-button"
+            onClick={() => setShowEnvEditor(true)}
+            title="Environment Variables"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 3v18" />
+              <rect x="3" y="8" width="18" height="8" rx="1" />
+            </svg>
+            .env
+          </button>
           <GitHubButton
             githubState={githubState}
             vercelState={vercelState}
@@ -435,6 +514,15 @@ function App() {
           }
         />
       </div>
+
+      <EnvEditor
+        projectPath={currentProject?.path || ""}
+        isOpen={showEnvEditor}
+        onClose={() => {
+          setShowEnvEditor(false);
+          focusTerminal();
+        }}
+      />
     </div>
   );
 }

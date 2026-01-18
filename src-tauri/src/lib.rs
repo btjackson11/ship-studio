@@ -104,6 +104,202 @@ async fn list_pages(project_path: String) -> Result<Vec<PageInfo>, String> {
     scan_pages(&app_dir, &app_dir)
 }
 
+#[tauri::command]
+async fn check_sanity_installed(project_path: String) -> Result<bool, String> {
+    let path = std::path::PathBuf::from(&project_path);
+
+    // Check for sanity.config.ts or sanity.config.js
+    if path.join("sanity.config.ts").exists() || path.join("sanity.config.js").exists() {
+        return Ok(true);
+    }
+
+    // Check package.json for sanity dependency
+    let pkg_path = path.join("package.json");
+    if pkg_path.exists() {
+        if let Ok(contents) = std::fs::read_to_string(&pkg_path) {
+            if contents.contains("\"sanity\"") || contents.contains("\"next-sanity\"") {
+                return Ok(true);
+            }
+        }
+    }
+
+    Ok(false)
+}
+
+// ============ Environment Variables ============
+
+#[derive(Serialize)]
+struct EnvFile {
+    name: String,
+    path: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct EnvVar {
+    key: String,
+    value: String,
+}
+
+#[tauri::command]
+async fn list_env_files(project_path: String) -> Result<Vec<EnvFile>, String> {
+    let project = std::path::Path::new(&project_path);
+    let mut env_files = Vec::new();
+
+    // Common env file names to look for
+    let env_names = [
+        ".env",
+        ".env.local",
+        ".env.development",
+        ".env.development.local",
+        ".env.production",
+        ".env.production.local",
+        ".env.test",
+        ".env.test.local",
+    ];
+
+    for name in env_names {
+        let env_path = project.join(name);
+        if env_path.exists() {
+            env_files.push(EnvFile {
+                name: name.to_string(),
+                path: env_path.to_string_lossy().to_string(),
+            });
+        }
+    }
+
+    Ok(env_files)
+}
+
+#[tauri::command]
+async fn read_env_file(file_path: String) -> Result<Vec<EnvVar>, String> {
+    let contents = std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
+    let mut vars = Vec::new();
+
+    for line in contents.lines() {
+        let line = line.trim();
+
+        // Skip empty lines and comments
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        // Parse KEY=VALUE format
+        if let Some(eq_pos) = line.find('=') {
+            let key = line[..eq_pos].trim().to_string();
+            let value = line[eq_pos + 1..].trim().to_string();
+
+            // Remove surrounding quotes if present
+            let value = if (value.starts_with('"') && value.ends_with('"'))
+                || (value.starts_with('\'') && value.ends_with('\''))
+            {
+                value[1..value.len() - 1].to_string()
+            } else {
+                value
+            };
+
+            vars.push(EnvVar { key, value });
+        }
+    }
+
+    Ok(vars)
+}
+
+#[tauri::command]
+async fn write_env_file(file_path: String, vars: Vec<EnvVar>) -> Result<(), String> {
+    let mut contents = String::new();
+
+    for var in vars {
+        // Quote values that contain spaces or special characters
+        let value = if var.value.contains(' ') || var.value.contains('#') || var.value.contains('=') {
+            format!("\"{}\"", var.value)
+        } else {
+            var.value
+        };
+        contents.push_str(&format!("{}={}\n", var.key, value));
+    }
+
+    std::fs::write(&file_path, contents).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn create_env_file(project_path: String, file_name: String) -> Result<String, String> {
+    let project = std::path::Path::new(&project_path);
+    let env_path = project.join(&file_name);
+
+    if env_path.exists() {
+        return Err(format!("{} already exists", file_name));
+    }
+
+    std::fs::write(&env_path, "").map_err(|e| e.to_string())?;
+    Ok(env_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+async fn delete_env_file(file_path: String) -> Result<(), String> {
+    std::fs::remove_file(&file_path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[derive(Serialize)]
+struct IdeAvailability {
+    vscode: bool,
+    cursor: bool,
+}
+
+#[tauri::command]
+async fn check_ide_availability() -> IdeAvailability {
+    #[cfg(target_os = "macos")]
+    {
+        // Check if apps exist in /Applications
+        let vscode = std::path::Path::new("/Applications/Visual Studio Code.app").exists();
+        let cursor = std::path::Path::new("/Applications/Cursor.app").exists();
+        IdeAvailability { vscode, cursor }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        // Check if commands are in PATH
+        let vscode = which::which("code").is_ok();
+        let cursor = which::which("cursor").is_ok();
+        IdeAvailability { vscode, cursor }
+    }
+}
+
+#[tauri::command]
+async fn open_in_ide(project_path: String, ide: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let app_name = match ide.as_str() {
+            "vscode" => "Visual Studio Code",
+            "cursor" => "Cursor",
+            _ => return Err(format!("Unknown IDE: {}", ide)),
+        };
+
+        // Use 'open -a' on macOS which is more reliable
+        Command::new("open")
+            .args(["-a", app_name, &project_path])
+            .spawn()
+            .map_err(|e| format!("Failed to open in {}: {}", ide, e))?;
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let cmd = match ide.as_str() {
+            "vscode" => "code",
+            "cursor" => "cursor",
+            _ => return Err(format!("Unknown IDE: {}", ide)),
+        };
+
+        Command::new(cmd)
+            .arg(&project_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open in {}: {}", ide, e))?;
+    }
+
+    Ok(())
+}
+
 fn scan_pages(dir: &std::path::Path, base_dir: &std::path::Path) -> Result<Vec<PageInfo>, String> {
     let mut pages = Vec::new();
 
@@ -1434,6 +1630,15 @@ pub fn run() {
             ensure_marketingstack_dir,
             list_projects,
             list_pages,
+            check_sanity_installed,
+            // Environment variables
+            list_env_files,
+            read_env_file,
+            write_env_file,
+            create_env_file,
+            delete_env_file,
+            check_ide_availability,
+            open_in_ide,
             delete_project,
             capture_project_thumbnail,
             get_project_thumbnail,
