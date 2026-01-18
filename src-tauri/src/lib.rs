@@ -201,7 +201,7 @@ async fn list_projects() -> Result<Vec<ProjectInfo>, String> {
 }
 
 #[tauri::command]
-async fn capture_project_thumbnail(project_path: String, _url: String) -> Result<String, String> {
+async fn capture_project_thumbnail(project_path: String, url: String) -> Result<String, String> {
     let project = std::path::Path::new(&project_path);
     let marketingstack_dir = project.join(".marketingstack");
 
@@ -213,18 +213,48 @@ async fn capture_project_thumbnail(project_path: String, _url: String) -> Result
     let thumbnail_path = marketingstack_dir.join("thumbnail.png");
     let thumbnail_path_str = thumbnail_path.to_string_lossy().to_string();
 
-    // Use macOS native screencapture - doesn't spawn any browser
-    let output = Command::new("screencapture")
-        .args(["-x", "-t", "png", &thumbnail_path_str])
-        .output()
-        .map_err(|e| format!("Failed to run screencapture: {}", e))?;
+    // Try Chrome first (most common), then Chromium, then Edge
+    let chrome_paths = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    ];
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("screencapture failed: {}", stderr));
+    let chrome_path = chrome_paths.iter().find(|p| std::path::Path::new(p).exists());
+
+    if let Some(browser) = chrome_path {
+        let screenshot_arg = format!("--screenshot={}", thumbnail_path_str);
+        // Use exact dimensions for consistent thumbnails
+        let output = Command::new(browser)
+            .args([
+                "--headless=new",
+                "--disable-gpu",
+                "--hide-scrollbars",
+                "--window-size=1280,800",
+                &screenshot_arg,
+                &url,
+            ])
+            .output()
+            .map_err(|e| format!("Failed to run browser: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Browser screenshot failed: {}", stderr));
+        }
+
+        // Resize to exact thumbnail dimensions using sips (macOS)
+        let _ = Command::new("sips")
+            .args([
+                "-z", "800", "1280",  // Resize to exact height width
+                "--resampleWidth", "640",  // Then scale down for thumbnail
+                &thumbnail_path_str,
+            ])
+            .output();
+
+        Ok(thumbnail_path_str)
+    } else {
+        Err("No supported browser found for screenshots (Chrome, Chromium, or Edge required)".to_string())
     }
-
-    Ok(thumbnail_path_str)
 }
 
 #[tauri::command]
@@ -1362,12 +1392,42 @@ async fn spawn_pty(app: tauri::AppHandle, options: SpawnPtyOptions) -> Result<u3
     Ok(id)
 }
 
+// Kill orphaned Claude processes spawned by this app
+fn cleanup_claude_processes() {
+    #[cfg(unix)]
+    {
+        use std::process::Command;
+        // Find Claude processes that are children of Marketingstack and kill them
+        // This handles orphaned processes from crashed dev sessions
+
+        // Get current process's children and kill them
+        let pid = std::process::id();
+        let _ = Command::new("pkill")
+            .args(["-P", &pid.to_string(), "claude"])
+            .output();
+
+        // Also kill any orphaned claude processes (parent is init/launchd - PID 1)
+        // by checking for claude processes whose parent is 1
+        let _ = Command::new("sh")
+            .args(["-c", "ps -eo pid,ppid,comm | grep claude | awk '$2 == 1 {print $1}' | xargs -r kill 2>/dev/null"])
+            .output();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Clean up any orphaned Claude processes from previous crashed sessions
+    cleanup_claude_processes();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_pty::init())
+        .on_window_event(|_window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                cleanup_claude_processes();
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             check_prerequisites,
             get_marketingstack_dir,

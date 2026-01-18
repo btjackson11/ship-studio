@@ -26,7 +26,7 @@ import { checkClaudeCliStatus, ClaudeCliStatus } from "./lib/claude";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
-type AppView = "loading" | "setup" | "projects" | "create" | "workspace";
+type AppView = "loading" | "setup" | "projects" | "create" | "project-loading" | "workspace";
 
 export interface GitHubState {
   cliStatus: GitHubCliStatus;
@@ -166,18 +166,33 @@ function App() {
   // Capture project screenshot in background
   const captureScreenshot = useCallback(async (projectPath: string) => {
     try {
-      await invoke("capture_project_thumbnail", {
+      console.log("Invoking capture_project_thumbnail for:", projectPath);
+      const result = await invoke("capture_project_thumbnail", {
         projectPath,
         url: "http://localhost:3000",
       });
+      console.log("Screenshot captured:", result);
     } catch (error) {
       console.error("Failed to capture thumbnail:", error);
     }
   }, []);
 
+  // Handle preview server ready - capture initial screenshot
+  const handlePreviewReady = useCallback(() => {
+    console.log("Preview ready, current project:", currentProject?.name);
+    if (currentProject) {
+      // Small delay to let the page fully render
+      setTimeout(() => {
+        console.log("Capturing screenshot for:", currentProject.path);
+        captureScreenshot(currentProject.path);
+      }, 2000);
+    }
+  }, [currentProject, captureScreenshot]);
+
 
   const handleSelectProject = async (project: Project) => {
     setCurrentProject(project);
+    setView("project-loading");
 
     // Check project's GitHub and Vercel status in parallel
     try {
@@ -200,11 +215,6 @@ function App() {
     }
 
     setView("workspace");
-
-    // Capture initial screenshot after a delay (wait for dev server to be ready)
-    setTimeout(() => {
-      captureScreenshot(project.path);
-    }, 5000);
 
     // Capture screenshots every 5 minutes
     screenshotIntervalRef.current = setInterval(() => {
@@ -313,6 +323,15 @@ function App() {
     );
   }
 
+  if (view === "project-loading") {
+    return (
+      <div className="app loading">
+        <div className="spinner" />
+        <p>Opening {currentProject?.name}...</p>
+      </div>
+    );
+  }
+
   // Workspace view
   return (
     <div className="app workspace">
@@ -371,7 +390,11 @@ function App() {
           }
           right={
             <div className="preview-pane">
-              <Preview port={3000} projectPath={currentProject?.path || ""} />
+              <Preview
+                port={3000}
+                projectPath={currentProject?.path || ""}
+                onServerReady={handlePreviewReady}
+              />
             </div>
           }
         />

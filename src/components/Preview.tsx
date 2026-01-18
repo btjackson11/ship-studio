@@ -44,14 +44,17 @@ const BreakpointIcon = ({ type }: { type: Breakpoint }) => {
 interface PreviewProps {
   port?: number;
   projectPath: string;
+  onServerReady?: () => void;
 }
 
-export function Preview({ port = 3000, projectPath }: PreviewProps) {
+export function Preview({ port = 3000, projectPath, onServerReady }: PreviewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [serverReady, setServerReady] = useState(false);
   const [breakpoint, setBreakpoint] = useState<Breakpoint>("desktop");
+  const [zoom, setZoom] = useState(100);
+  const [zoomInput, setZoomInput] = useState("100%");
   const [pages, setPages] = useState<PageInfo[]>([]);
   const [currentPage, setCurrentPage] = useState("/");
   const [showPageDropdown, setShowPageDropdown] = useState(false);
@@ -98,6 +101,13 @@ export function Preview({ port = 3000, projectPath }: PreviewProps) {
       searchInputRef.current.focus();
     }
   }, [showPageDropdown]);
+
+  // Notify parent when server becomes ready
+  useEffect(() => {
+    if (serverReady && onServerReady) {
+      onServerReady();
+    }
+  }, [serverReady, onServerReady]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -249,18 +259,48 @@ export function Preview({ port = 3000, projectPath }: PreviewProps) {
             </button>
           ))}
         </div>
+
+        <div className="preview-zoom">
+          <button onClick={() => { const n = Math.max(50, zoom - 10); setZoom(n); setZoomInput(n + "%"); }} title="Zoom out">−</button>
+          <input
+            type="text"
+            value={zoomInput}
+            onChange={(e) => setZoomInput(e.target.value.replace(/[^0-9%]/g, ''))}
+            onFocus={(e) => setZoomInput(zoomInput.replace('%', ''))}
+            onBlur={() => {
+              const val = parseInt(zoomInput, 10);
+              if (isNaN(val) || val < 50) { setZoom(50); setZoomInput("50%"); }
+              else if (val > 150) { setZoom(150); setZoomInput("150%"); }
+              else { setZoom(val); setZoomInput(val + "%"); }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            }}
+          />
+          <button onClick={() => { const n = Math.min(150, zoom + 10); setZoom(n); setZoomInput(n + "%"); }} title="Zoom in">+</button>
+        </div>
       </div>
       <div className="preview-viewport">
-        <iframe
-          ref={iframeRef}
-          src={serverReady ? currentUrl : "about:blank"}
-          className="preview-iframe"
+        <div
+          className="preview-iframe-wrapper"
           style={{
             width: BREAKPOINTS[breakpoint].width,
-            maxWidth: "100%"
+            maxWidth: "100%",
           }}
-          title="Preview"
-        />
+        >
+          <iframe
+            ref={iframeRef}
+            src={serverReady ? currentUrl : "about:blank"}
+            className="preview-iframe"
+            style={{
+              width: `${100 / (zoom / 100)}%`,
+              height: `${100 / (zoom / 100)}%`,
+              transform: `scale(${zoom / 100})`,
+              transformOrigin: "top left",
+            }}
+            title="Preview"
+          />
+        </div>
       </div>
     </div>
   );
