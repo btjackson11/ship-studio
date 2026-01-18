@@ -1,3 +1,16 @@
+//! # Marketingstack Backend
+//!
+//! This module contains all Tauri commands for the Marketingstack desktop app.
+//! Commands are organized into these categories:
+//!
+//! - **Project Management**: Create, list, delete projects in ~/Marketingstack
+//! - **Dev Server & Terminal**: PTY management for Claude Code terminal
+//! - **GitHub Integration**: Check status, create repos, commit and push
+//! - **Vercel Integration**: Check status, deploy projects
+//! - **Environment Variables**: Read/write .env files with validation
+//! - **Native Webview**: Child webview for Sanity CMS (OAuth support)
+//! - **Utilities**: Screenshots, IDE launcher, prerequisite checks
+
 use serde::{Deserialize, Serialize};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -6,8 +19,10 @@ use tauri::Emitter;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
 
+/// Counter for generating unique PTY IDs
 static PTY_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
+/// Result of checking if a prerequisite tool is installed
 #[derive(Serialize)]
 struct PrerequisiteCheck {
     name: String,
@@ -15,6 +30,8 @@ struct PrerequisiteCheck {
     path: Option<String>,
 }
 
+/// Checks if required tools (node, npm, git, claude) are installed.
+/// Returns availability and path for each tool.
 #[tauri::command]
 async fn check_prerequisites() -> Vec<PrerequisiteCheck> {
     let commands = vec!["node", "npm", "git", "claude"];
@@ -35,6 +52,7 @@ async fn check_prerequisites() -> Vec<PrerequisiteCheck> {
     results
 }
 
+/// Returns the path to ~/Marketingstack directory
 #[tauri::command]
 async fn get_marketingstack_dir() -> Result<String, String> {
     let home = dirs::home_dir().ok_or("Could not find home directory")?;
@@ -42,6 +60,7 @@ async fn get_marketingstack_dir() -> Result<String, String> {
     Ok(marketingstack_dir.to_string_lossy().to_string())
 }
 
+/// Creates ~/Marketingstack directory if it doesn't exist
 #[tauri::command]
 async fn ensure_marketingstack_dir() -> Result<String, String> {
     let home = dirs::home_dir().ok_or("Could not find home directory")?;
@@ -54,13 +73,16 @@ async fn ensure_marketingstack_dir() -> Result<String, String> {
     Ok(marketingstack_dir.to_string_lossy().to_string())
 }
 
+/// Project metadata returned by list_projects
 #[derive(Serialize)]
 struct ProjectInfo {
     name: String,
     path: String,
+    /// Asset protocol URL to thumbnail image, if it exists
     thumbnail: Option<String>,
 }
 
+/// Deletes a project directory. Only allows deletion from ~/Marketingstack.
 #[tauri::command]
 async fn delete_project(path: String) -> Result<(), String> {
     let project_path = std::path::Path::new(&path);
@@ -81,12 +103,17 @@ async fn delete_project(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Next.js page route information
 #[derive(Serialize)]
 struct PageInfo {
+    /// URL route (e.g., "/about", "/blog/[slug]")
     route: String,
+    /// Path to the page file
     file_path: String,
 }
 
+/// Scans a Next.js project's app directory for page routes.
+/// Supports both `/app` and `/src/app` directory structures.
 #[tauri::command]
 async fn list_pages(project_path: String) -> Result<Vec<PageInfo>, String> {
     let project = std::path::Path::new(&project_path);
@@ -204,11 +231,25 @@ async fn read_env_file(file_path: String) -> Result<Vec<EnvVar>, String> {
     Ok(vars)
 }
 
+/// Writes environment variables to a .env file with validation.
+/// Validates that variable names are alphanumeric/underscore and don't start with numbers.
+/// Auto-quotes values containing spaces or special characters.
 #[tauri::command]
 async fn write_env_file(file_path: String, vars: Vec<EnvVar>) -> Result<(), String> {
     let mut contents = String::new();
 
     for var in vars {
+        // Validate env variable key: must be alphanumeric or underscore, can't start with number
+        if var.key.is_empty() {
+            return Err("Environment variable name cannot be empty".to_string());
+        }
+        if !var.key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            return Err(format!("Invalid environment variable name: {}. Only letters, numbers, and underscores allowed.", var.key));
+        }
+        if var.key.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+            return Err(format!("Environment variable name cannot start with a number: {}", var.key));
+        }
+
         // Quote values that contain spaces or special characters
         let value = if var.value.contains(' ') || var.value.contains('#') || var.value.contains('=') {
             format!("\"{}\"", var.value)
@@ -222,10 +263,26 @@ async fn write_env_file(file_path: String, vars: Vec<EnvVar>) -> Result<(), Stri
     Ok(())
 }
 
+/// Creates a new .env file in the project directory.
+/// Validates filename to prevent path traversal attacks.
+/// Only allows filenames starting with '.' and containing 'env'.
 #[tauri::command]
 async fn create_env_file(project_path: String, file_name: String) -> Result<String, String> {
+    // Validate filename to prevent path traversal attacks
+    if file_name.contains('/') || file_name.contains('\\') || file_name.contains("..") {
+        return Err("Invalid filename: path separators not allowed".to_string());
+    }
+    if !file_name.starts_with('.') || !file_name.contains("env") {
+        return Err("Invalid filename: must be an env file (e.g., .env, .env.local)".to_string());
+    }
+
     let project = std::path::Path::new(&project_path);
     let env_path = project.join(&file_name);
+
+    // Double-check the resolved path is still within the project
+    if !env_path.starts_with(project) {
+        return Err("Invalid filename: path traversal detected".to_string());
+    }
 
     if env_path.exists() {
         return Err(format!("{} already exists", file_name));
@@ -264,6 +321,124 @@ async fn check_ide_availability() -> IdeAvailability {
         let cursor = which::which("cursor").is_ok();
         IdeAvailability { vscode, cursor }
     }
+}
+
+// =============================================================================
+// Native Webview for Sanity CMS
+// =============================================================================
+// Uses Tauri's unstable child webview feature to create a native webview
+// that can handle OAuth flows (unlike iframes which block cross-origin auth).
+// The webview is positioned absolutely over the main window.
+
+use std::sync::Mutex;
+use tauri::{WebviewUrl, Manager, Webview};
+
+/// Tracks whether a preview webview currently exists
+static PREVIEW_WEBVIEW_EXISTS: Mutex<bool> = Mutex::new(false);
+
+/// Creates a native child webview at the specified position.
+/// Used for Sanity Studio to support OAuth authentication.
+/// Only one preview webview can exist at a time.
+#[tauri::command]
+async fn create_preview_webview(
+    app: tauri::AppHandle,
+    url: String,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    let webview_window = app.get_webview_window("main").ok_or("Main window not found")?;
+    // Access the underlying Window through the Webview
+    let webview_ref: &Webview<tauri::Wry> = webview_window.as_ref();
+    let window = webview_ref.window();
+
+    // Check if webview already exists
+    let mut exists = PREVIEW_WEBVIEW_EXISTS.lock().unwrap();
+    if *exists {
+        // Just navigate the existing webview
+        if let Some(webview) = app.get_webview("preview") {
+            let parsed_url: url::Url = url.parse().map_err(|e: url::ParseError| e.to_string())?;
+            webview.navigate(parsed_url).map_err(|e| e.to_string())?;
+        }
+        return Ok(());
+    }
+
+    // Create the preview webview
+    let parsed_url: url::Url = url.parse().map_err(|e: url::ParseError| e.to_string())?;
+    let builder = tauri::webview::WebviewBuilder::new(
+        "preview",
+        WebviewUrl::External(parsed_url)
+    )
+    .auto_resize();
+
+    window.add_child(
+        builder,
+        tauri::LogicalPosition::new(x, y),
+        tauri::LogicalSize::new(width, height),
+    ).map_err(|e| format!("Failed to create webview: {}", e))?;
+
+    *exists = true;
+    Ok(())
+}
+
+#[tauri::command]
+async fn navigate_preview_webview(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    if let Some(webview) = app.get_webview("preview") {
+        let parsed_url: url::Url = url.parse().map_err(|e: url::ParseError| e.to_string())?;
+        webview.navigate(parsed_url).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn resize_preview_webview(
+    app: tauri::AppHandle,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    if let Some(webview) = app.get_webview("preview") {
+        webview.set_position(tauri::LogicalPosition::new(x, y)).map_err(|e| e.to_string())?;
+        webview.set_size(tauri::LogicalSize::new(width, height)).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn destroy_preview_webview(app: tauri::AppHandle) -> Result<(), String> {
+    let mut exists = PREVIEW_WEBVIEW_EXISTS.lock().unwrap();
+    if let Some(webview) = app.get_webview("preview") {
+        webview.close().map_err(|e| e.to_string())?;
+        *exists = false;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn open_studio_window(app: tauri::AppHandle, url: String, title: String) -> Result<(), String> {
+    use tauri::WebviewWindowBuilder;
+
+    // Check if studio window already exists
+    if let Some(window) = app.get_webview_window("studio") {
+        // Focus existing window and navigate to URL
+        window.set_focus().map_err(|e| e.to_string())?;
+        let parsed_url: url::Url = url.parse().map_err(|e: url::ParseError| e.to_string())?;
+        window.navigate(parsed_url).map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    // Create new studio window
+    let parsed_url: url::Url = url.parse().map_err(|e: url::ParseError| e.to_string())?;
+    WebviewWindowBuilder::new(&app, "studio", WebviewUrl::External(parsed_url))
+        .title(&title)
+        .inner_size(1000.0, 700.0)
+        .resizable(true)
+        .build()
+        .map_err(|e| format!("Failed to create studio window: {}", e))?;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -684,7 +859,8 @@ fn get_vercel_command() -> Command {
     if let Some(path) = find_vercel_binary() {
         Command::new(path)
     } else {
-        get_vercel_command()
+        // Fallback to system PATH
+        Command::new("vercel")
     }
 }
 
@@ -776,10 +952,17 @@ async fn deploy_to_vercel(options: DeployToVercelOptions) -> Result<String, Stri
         return Err(format!("Failed to deploy to Vercel: {} {}", stderr, stdout));
     }
 
-    // Return the production URL (always based on project name)
-    // The vercel --prod output contains a deployment-specific URL with a hash,
-    // but the actual production URL is always https://{project_name}.vercel.app
-    Ok(format!("https://{}.vercel.app", project_name))
+    // Build the production URL
+    let production_url = format!("https://{}.vercel.app", project_name);
+
+    // Write the production URL to a marker file for reliable detection
+    let vercel_dir = std::path::Path::new(project_path).join(".vercel");
+    let url_file = vercel_dir.join("production_url");
+    if let Err(e) = std::fs::write(&url_file, &production_url) {
+        eprintln!("Warning: Failed to write production_url marker: {}", e);
+    }
+
+    Ok(production_url)
 }
 
 #[tauri::command]
@@ -829,17 +1012,20 @@ struct ProjectVercelStatus {
     production_url: Option<String>,
 }
 
+/// Checks if a project is linked to Vercel and has a production deployment.
+///
+/// State flow:
+/// 1. No .vercel/project.json → not linked (is_linked: false)
+/// 2. .vercel/project.json exists but no production_url marker → linked, no URL
+/// 3. Has production_url marker → linked with URL (is_linked: true, production_url: Some)
 #[tauri::command]
 async fn get_project_vercel_status(project_path: String) -> ProjectVercelStatus {
-    eprintln!("Checking Vercel status for: {}", project_path);
-
     let project = std::path::Path::new(&project_path);
     let vercel_dir = project.join(".vercel");
     let project_json = vercel_dir.join("project.json");
 
     // Check if .vercel/project.json exists (indicates linked project)
     if !project_json.exists() {
-        eprintln!("No .vercel/project.json found");
         return ProjectVercelStatus {
             is_linked: false,
             project_name: None,
@@ -847,198 +1033,28 @@ async fn get_project_vercel_status(project_path: String) -> ProjectVercelStatus 
         };
     }
 
-    eprintln!(".vercel/project.json exists");
+    // Read project.json to get project name
+    let project_name = std::fs::read_to_string(&project_json)
+        .ok()
+        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+        .and_then(|json| json.get("projectName").and_then(|v| v.as_str()).map(|s| s.to_string()));
 
-    // Read project.json to get project info
-    let project_info = match std::fs::read_to_string(&project_json) {
-        Ok(content) => content,
-        Err(e) => {
-            eprintln!("Failed to read project.json: {}", e);
-            return ProjectVercelStatus {
-                is_linked: false,
-                project_name: None,
-                production_url: None,
-            };
-        }
-    };
-
-    eprintln!("project.json content: {}", project_info);
-
-    // Parse JSON to extract projectId and orgId
-    let json: serde_json::Value = match serde_json::from_str(&project_info) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("Failed to parse project.json: {}", e);
-            return ProjectVercelStatus {
-                is_linked: true,
-                project_name: None,
-                production_url: None,
-            };
-        }
-    };
-
-    let project_id = json.get("projectId").and_then(|v| v.as_str());
-    let project_name_from_config = json.get("projectName").and_then(|v| v.as_str());
-
-    eprintln!("Project ID: {:?}, Project Name: {:?}", project_id, project_name_from_config);
-
-    // Store project name for later - but don't assume it's deployed just because it's linked
-    let project_name = project_name_from_config.map(|s| s.to_string());
-
-    if project_id.is_none() {
-        eprintln!("No projectId found in project.json");
-        return ProjectVercelStatus {
-            is_linked: true,
-            project_name: None,
-            production_url: None,
-        };
-    }
-
-    let project_id = project_id.unwrap();
-    eprintln!("Project ID: {}", project_id);
-
-    // Method 1: Try `vercel ls --json` to get deployments for this linked project
-    // This works best for projects that have been deployed
-    eprintln!("Trying vercel ls --json...");
-    let ls_output = get_vercel_command()
-        .args(["ls", "--json"])
-        .current_dir(&project_path)
-        .output();
-
-    if let Ok(output) = ls_output {
-        eprintln!("vercel ls status: {}", output.status);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        eprintln!("vercel ls stdout (first 500 chars): {}", &stdout.chars().take(500).collect::<String>());
-        eprintln!("vercel ls stderr: {}", stderr);
-
-        if output.status.success() {
-            if let Ok(deployments) = serde_json::from_str::<serde_json::Value>(&stdout) {
-                eprintln!("Parsed deployments JSON");
-                // Look for a production deployment with an alias
-                if let Some(deps_array) = deployments.as_array() {
-                    eprintln!("Found {} deployments", deps_array.len());
-                    for dep in deps_array {
-                        // Check if this is a production deployment
-                        let target = dep.get("target").and_then(|t| t.as_str());
-                        eprintln!("Deployment target: {:?}", target);
-                        let is_prod = target == Some("production");
-                        if is_prod {
-                            eprintln!("Found production deployment!");
-                            // Get the alias (custom domain or .vercel.app URL)
-                            if let Some(aliases) = dep.get("alias").and_then(|a| a.as_array()) {
-                                eprintln!("Aliases: {:?}", aliases);
-                                if let Some(first_alias) = aliases.first().and_then(|a| a.as_str()) {
-                                    let url = if first_alias.starts_with("http") {
-                                        first_alias.to_string()
-                                    } else {
-                                        format!("https://{}", first_alias)
-                                    };
-                                    let name = dep.get("name").and_then(|n| n.as_str()).map(|s| s.to_string());
-                                    eprintln!("Returning with URL from alias: {}", url);
-                                    return ProjectVercelStatus {
-                                        is_linked: true,
-                                        project_name: name,
-                                        production_url: Some(url),
-                                    };
-                                }
-                            }
-                            // Fallback to url field
-                            if let Some(url) = dep.get("url").and_then(|u| u.as_str()) {
-                                let full_url = if url.starts_with("http") {
-                                    url.to_string()
-                                } else {
-                                    format!("https://{}", url)
-                                };
-                                let name = dep.get("name").and_then(|n| n.as_str()).map(|s| s.to_string());
-                                eprintln!("Returning with URL from url field: {}", full_url);
-                                return ProjectVercelStatus {
-                                    is_linked: true,
-                                    project_name: name,
-                                    production_url: Some(full_url),
-                                };
-                            }
-                        }
-                    }
-                    eprintln!("No production deployment found in array");
-                }
-            } else {
-                eprintln!("Failed to parse vercel ls JSON");
-            }
-        }
-    } else {
-        eprintln!("vercel ls command failed to execute");
-    }
-
-    // Method 2: Try `vercel project ls --json` to find the project by ID
-    // Note: This only verifies the project exists, not that it has deployments
-    eprintln!("Trying vercel project ls --json...");
-    let output = get_vercel_command()
-        .args(["project", "ls", "--json"])
-        .current_dir(&project_path)
-        .output();
-
-    if let Ok(output) = output {
-        eprintln!("vercel project ls status: {}", output.status);
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            eprintln!("vercel project ls stdout (first 500 chars): {}", &stdout.chars().take(500).collect::<String>());
-            if let Ok(projects) = serde_json::from_str::<serde_json::Value>(&stdout) {
-                if let Some(projects_array) = projects.as_array() {
-                    eprintln!("Found {} projects", projects_array.len());
-                    for proj in projects_array {
-                        if let Some(id) = proj.get("id").and_then(|v| v.as_str()) {
-                            eprintln!("Checking project ID: {} vs {}", id, project_id);
-                            if id == project_id {
-                                let name = proj.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
-                                // Don't construct URL - project exists but may not have deployments
-                                eprintln!("Found matching project! Name: {:?}, but no verified deployment", name);
-                                return ProjectVercelStatus {
-                                    is_linked: true,
-                                    project_name: name.or(project_name.clone()),
-                                    production_url: None, // No verified deployment
-                                };
-                            }
-                        }
-                    }
-                    eprintln!("No matching project ID found");
-                }
+    // Check for our production_url marker file (written after successful deployment)
+    let url_file = vercel_dir.join("production_url");
+    if url_file.exists() {
+        if let Ok(url) = std::fs::read_to_string(&url_file) {
+            let url = url.trim().to_string();
+            if !url.is_empty() {
+                return ProjectVercelStatus {
+                    is_linked: true,
+                    project_name,
+                    production_url: Some(url),
+                };
             }
         }
     }
 
-    // Method 3: Try vercel inspect for deployment details
-    let inspect_output = get_vercel_command()
-        .args(["inspect", "--json"])
-        .current_dir(&project_path)
-        .output();
-
-    if let Ok(output) = inspect_output {
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            if let Ok(info) = serde_json::from_str::<serde_json::Value>(&stdout) {
-                let name = info.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
-                let url = info.get("url").and_then(|v| v.as_str()).map(|s| {
-                    if s.starts_with("http") {
-                        s.to_string()
-                    } else {
-                        format!("https://{}", s)
-                    }
-                });
-                if url.is_some() {
-                    return ProjectVercelStatus {
-                        is_linked: true,
-                        project_name: name,
-                        production_url: url,
-                    };
-                }
-            }
-        }
-    }
-
-    // Final fallback: linked but no verified deployment found
-    // Return project name if we have it, but no production URL
-    eprintln!("Fallback: linked but no verified deployment");
+    // Project is linked but no production deployment found
     ProjectVercelStatus {
         is_linked: true,
         project_name,
@@ -1639,6 +1655,11 @@ pub fn run() {
             delete_env_file,
             check_ide_availability,
             open_in_ide,
+            create_preview_webview,
+            navigate_preview_webview,
+            resize_preview_webview,
+            destroy_preview_webview,
+            open_studio_window,
             delete_project,
             capture_project_thumbnail,
             get_project_thumbnail,

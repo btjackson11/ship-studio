@@ -87,6 +87,9 @@ function App() {
   const [ideAvailability, setIdeAvailability] = useState<{ vscode: boolean; cursor: boolean }>({ vscode: false, cursor: false });
   const [openingIde, setOpeningIde] = useState<string | null>(null);
 
+  // Current preview page (for Vercel Live button)
+  const [currentPreviewPage, setCurrentPreviewPage] = useState("/");
+
   // Check IDE availability on mount
   useEffect(() => {
     invoke<{ vscode: boolean; cursor: boolean }>("check_ide_availability")
@@ -228,7 +231,20 @@ function App() {
 
 
   const handleSelectProject = async (project: Project) => {
+    // Stop any existing dev server first
+    if (devServerRef.current) {
+      await devServerRef.current.stop();
+      devServerRef.current = null;
+    }
+
+    // Clear any existing screenshot interval
+    if (screenshotIntervalRef.current) {
+      clearInterval(screenshotIntervalRef.current);
+      screenshotIntervalRef.current = null;
+    }
+
     setCurrentProject(project);
+    setCurrentPreviewPage("/");
     setView("project-loading");
 
     // Check project's GitHub and Vercel status in parallel
@@ -259,7 +275,20 @@ function App() {
     }, SCREENSHOT_INTERVAL_MS);
   };
 
-  const handleCreateProject = () => {
+  const handleCreateProject = async () => {
+    // Stop any existing dev server
+    if (devServerRef.current) {
+      await devServerRef.current.stop();
+      devServerRef.current = null;
+    }
+
+    // Clear screenshot interval
+    if (screenshotIntervalRef.current) {
+      clearInterval(screenshotIntervalRef.current);
+      screenshotIntervalRef.current = null;
+    }
+
+    setCurrentProject(null);
     setView("create");
   };
 
@@ -445,6 +474,7 @@ function App() {
             projectGithubStatus={projectGithubStatus}
             projectPath={currentProject?.path || ""}
             projectName={currentProject?.name || ""}
+            currentPage={currentPreviewPage}
             onStatusChange={handleVercelStatusChange}
             onVercelConnect={refreshVercelStatus}
             onModalClose={focusTerminal}
@@ -509,6 +539,7 @@ function App() {
                 port={DEV_SERVER_PORT}
                 projectPath={currentProject?.path || ""}
                 onServerReady={handlePreviewReady}
+                onPageChange={setCurrentPreviewPage}
               />
             </div>
           }

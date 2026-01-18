@@ -1974,6 +1974,7 @@ dependencies = [
  "tauri-plugin-pty",
  "tauri-plugin-shell",
  "tokio",
+ "url",
  "which",
 ]
 

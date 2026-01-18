@@ -13,6 +13,9 @@ Marketingstack is a desktop application that combines Claude Code's AI capabilit
 - **GitHub Integration** - One-click repo creation and publishing with smart change detection
 - **Vercel Integration** - Deploy to production with one click, auto-deploys on push
 - **Page Navigation** - Quick switcher for all your Next.js routes
+- **Sanity CMS Integration** - Native webview for Sanity Studio with full OAuth support
+- **Environment Variables** - Built-in `.env` file editor with syntax validation
+- **IDE Launcher** - Open projects directly in VS Code or Cursor
 
 ## Prerequisites
 
@@ -81,25 +84,26 @@ This will start both the Vite dev server and the Tauri application.
 
 ```
 marketingstack/
-├── src/                    # React frontend
-│   ├── components/         # UI components
-│   │   ├── Terminal.tsx    # Claude Code terminal
-│   │   ├── Preview.tsx     # Live preview iframe
-│   │   ├── GitHubButton.tsx# GitHub integration
-│   │   ├── VercelButton.tsx# Vercel deployment
+├── src/                      # React frontend
+│   ├── components/           # UI components
+│   │   ├── Terminal.tsx      # Claude Code terminal with PTY
+│   │   ├── Preview.tsx       # Live preview with native webview for CMS
+│   │   ├── GitHubButton.tsx  # GitHub repo creation & publishing
+│   │   ├── VercelButton.tsx  # Vercel deployment & live site button
 │   │   ├── CreateProject.tsx # Project creation wizard
-│   │   └── ...
-│   ├── lib/                # Utilities
-│   │   ├── github.ts       # GitHub API helpers
-│   │   ├── vercel.ts       # Vercel API helpers
-│   │   └── project.ts      # Project management
-│   ├── App.tsx             # Main application
-│   └── App.css             # Styles
-├── src-tauri/              # Rust backend
+│   │   ├── EnvEditor.tsx     # Environment variable editor modal
+│   │   └── SplitPane.tsx     # Resizable split pane layout
+│   ├── lib/                  # Utilities
+│   │   ├── github.ts         # GitHub CLI helpers
+│   │   ├── vercel.ts         # Vercel CLI helpers
+│   │   └── project.ts        # Project management
+│   ├── App.tsx               # Main application & state management
+│   └── App.css               # All styles (CSS variables, dark theme)
+├── src-tauri/                # Rust backend
 │   ├── src/
-│   │   └── lib.rs          # Tauri commands
-│   ├── Cargo.toml          # Rust dependencies
-│   └── tauri.conf.json     # Tauri configuration
+│   │   └── lib.rs            # 50+ Tauri commands (see Backend API below)
+│   ├── Cargo.toml            # Rust dependencies
+│   └── tauri.conf.json       # Tauri configuration & CSP
 └── package.json
 ```
 
@@ -127,11 +131,39 @@ Marketingstack integrates with GitHub CLI for seamless version control:
 
 Deploy your projects to production with one click:
 
-1. **Connect Vercel** → Authenticate with your Vercel account
-2. **Deploy to Vercel** → Links project and deploys to production
-3. **Live** → Opens your live site at `https://your-project.vercel.app`
+1. **No GitHub repo** → Vercel button hidden (create repo first)
+2. **Deploy** → Opens modal to configure and deploy to Vercel
+3. **Deploying...** → Shows progress while deployment runs
+4. **Live** → Opens your live site at `https://your-project.vercel.app`
 
 Auto-deploys are enabled when connected to GitHub—every push triggers a new deployment.
+
+### Sanity CMS Integration
+
+Projects using Sanity CMS get a dedicated "Open Sanity" button in the preview toolbar:
+
+1. **Auto-Detection** → Marketingstack detects `sanity.config.ts` or Sanity dependencies
+2. **Native Webview** → Opens Sanity Studio in a native webview (not iframe) for full OAuth support
+3. **Full Features** → Google OAuth, image uploads, and all Sanity features work correctly
+
+### Environment Variables
+
+Manage your `.env` files directly in the app:
+
+1. Click the **gear icon** in the project header
+2. Create new env files (`.env`, `.env.local`, `.env.production`)
+3. Add, edit, or delete environment variables
+4. Changes are saved automatically
+
+Supports validation for variable names (alphanumeric + underscore only).
+
+### IDE Integration
+
+Open projects in your preferred code editor:
+
+1. Click the **code icon** in the project header
+2. Choose **VS Code** or **Cursor**
+3. The project opens in a new editor window
 
 ### Project Thumbnails
 
@@ -151,6 +183,69 @@ When you open a project, Marketingstack automatically captures a screenshot of y
 - **Styling**: CSS Variables (dark theme)
 - **Fonts**: JetBrains Mono Nerd Font
 
+## Backend API (Tauri Commands)
+
+The Rust backend (`src-tauri/src/lib.rs`) exposes these commands to the frontend:
+
+### Project Management
+| Command | Description |
+|---------|-------------|
+| `get_marketingstack_dir` | Returns `~/Marketingstack` path |
+| `list_projects` | Lists all projects in Marketingstack directory |
+| `create_project` | Clones template and installs dependencies |
+| `delete_project` | Removes a project directory |
+| `list_pages` | Scans Next.js app directory for routes |
+
+### Dev Server & Terminal
+| Command | Description |
+|---------|-------------|
+| `spawn_pty` | Creates a PTY for terminal emulation |
+| `write_pty` | Sends input to a PTY |
+| `resize_pty` | Resizes PTY dimensions |
+| `kill_pty` | Terminates a PTY process |
+| `start_dev_server` | Runs `npm run dev` in background |
+| `stop_dev_server` | Kills the dev server process |
+
+### GitHub Integration
+| Command | Description |
+|---------|-------------|
+| `check_gh_cli_status` | Checks if `gh` is installed and authenticated |
+| `get_project_github_status` | Returns repo info, remote URL, pending changes |
+| `create_github_repo` | Creates a new GitHub repository |
+| `commit_and_push` | Stages all changes, commits, and pushes |
+
+### Vercel Integration
+| Command | Description |
+|---------|-------------|
+| `check_vercel_cli_status` | Checks if `vercel` is installed and authenticated |
+| `get_project_vercel_status` | Returns linked status and production URL |
+| `deploy_to_vercel` | Links project and deploys to production |
+
+### Environment Variables
+| Command | Description |
+|---------|-------------|
+| `list_env_files` | Lists all `.env*` files in project |
+| `read_env_file` | Parses env file into key-value pairs |
+| `write_env_file` | Saves env variables with validation |
+| `create_env_file` | Creates a new env file |
+| `delete_env_file` | Removes an env file |
+
+### Native Webview (for Sanity CMS)
+| Command | Description |
+|---------|-------------|
+| `create_preview_webview` | Creates a child webview at specified position |
+| `resize_preview_webview` | Updates webview position and size |
+| `destroy_preview_webview` | Removes the child webview |
+| `check_sanity_installed` | Detects Sanity in project |
+
+### Utilities
+| Command | Description |
+|---------|-------------|
+| `check_prerequisites` | Verifies Node, Git, Claude Code are installed |
+| `capture_screenshot` | Takes a screenshot using headless Chrome |
+| `check_ide_availability` | Checks if VS Code/Cursor are installed |
+| `open_in_ide` | Opens project in VS Code or Cursor |
+
 ## Configuration
 
 ### Tauri Config
@@ -168,6 +263,18 @@ https://github.com/julianmemberstack/marketingstack-boilerplate-next-1
 ```
 
 To use a different template, update `TEMPLATE_REPO` in `src/components/CreateProject.tsx`.
+
+## Known Limitations
+
+### Page Selector Navigation
+
+The page selector dropdown shows available routes and lets you navigate to them. However, if you click links inside the preview iframe, the selector won't update to reflect the new page. This is due to browser cross-origin security restrictions (the preview runs on a different port).
+
+**Workaround:** Use the page selector dropdown to navigate between pages.
+
+### Vercel Detection for External Deployments
+
+Projects deployed to Vercel outside of Marketingstack (e.g., via CLI directly) may show "Deploy" instead of "Live" until redeployed through the app. This is because Marketingstack uses a marker file to track deployment status.
 
 ## Troubleshooting
 

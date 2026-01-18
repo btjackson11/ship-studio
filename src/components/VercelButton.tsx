@@ -17,6 +17,7 @@ interface VercelButtonProps {
   projectGithubStatus: ProjectGitHubStatus | null;
   projectPath: string;
   projectName: string;
+  currentPage?: string;
   onStatusChange: (deployedUrl?: string) => void;
   onVercelConnect: () => void;
   onModalClose?: () => void;
@@ -28,6 +29,7 @@ export function VercelButton({
   projectGithubStatus,
   projectPath,
   projectName,
+  currentPage = "/",
   onStatusChange,
   onVercelConnect,
   onModalClose,
@@ -228,25 +230,7 @@ export function VercelButton({
     );
   }
 
-  // If project is connected to Vercel and has a URL, show Live button
-  if (projectVercelStatus?.is_linked && projectVercelStatus?.production_url) {
-    return (
-      <button
-        className="vercel-button vercel-live"
-        onClick={() => {
-          if (projectVercelStatus.production_url) {
-            openUrl(projectVercelStatus.production_url);
-          }
-        }}
-        title={`Open ${projectVercelStatus.production_url}`}
-      >
-        <VercelIcon />
-        / (Live)
-      </button>
-    );
-  }
-
-  // If currently deploying, show deploying state
+  // If currently deploying, show deploying state (check FIRST before is_linked)
   if (isDeploying) {
     return (
       <button
@@ -259,6 +243,26 @@ export function VercelButton({
       </button>
     );
   }
+
+  // If project is connected to Vercel and has a production URL, show Live button
+  if (projectVercelStatus?.is_linked && projectVercelStatus?.production_url) {
+    const liveUrl = currentPage === "/"
+      ? projectVercelStatus.production_url
+      : `${projectVercelStatus.production_url}${currentPage}`;
+    return (
+      <button
+        className="vercel-button vercel-live"
+        onClick={() => openUrl(liveUrl)}
+        title={`Open ${liveUrl}`}
+      >
+        <VercelIcon />
+        Live
+      </button>
+    );
+  }
+
+  // If project is linked but no production URL (linked but not deployed yet)
+  // Falls through to the default Deploy button + modal below
 
   // If there was a deployment error, show error state with retry
   if (error && !projectVercelStatus?.is_linked) {
@@ -294,7 +298,7 @@ export function VercelButton({
         title="Deploy this project to Vercel"
       >
         <VercelIcon />
-        Deploy to Vercel
+        Deploy
       </button>
 
       {/* Deploy Modal */}
