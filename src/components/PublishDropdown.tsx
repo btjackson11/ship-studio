@@ -6,6 +6,7 @@ import {
   getBranchStatus,
   publishToStaging,
   publishToProduction,
+  resetToBranch,
 } from "../lib/github";
 import { ProjectVercelStatus } from "../lib/vercel";
 
@@ -41,6 +42,8 @@ export function PublishDropdown({
   const [productionChecked, setProductionChecked] = useState(false);
   const [publishState, setPublishState] = useState<PublishState>({ status: "idle" });
   const [branchStatus, setBranchStatus] = useState<BranchStatus | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState<"staging" | "production" | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const hasGitHubRepo = projectGithubStatus?.status === "connected" && projectGithubStatus?.github_repo;
@@ -122,9 +125,18 @@ export function PublishDropdown({
         "success"
       );
 
-      // Refresh branch status
+      // Refresh branch status and project status
       await fetchBranchStatus();
       onStatusChange();
+
+      // Poll for URL updates (Vercel takes time to register deployments)
+      const pollForUrls = async () => {
+        for (let i = 0; i < 10; i++) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          onStatusChange();
+        }
+      };
+      pollForUrls();
 
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -137,6 +149,21 @@ export function PublishDropdown({
 
   const handleTryAgain = () => {
     setPublishState({ status: "idle" });
+  };
+
+  const handleReset = async (branch: "staging" | "production") => {
+    setIsResetting(true);
+    try {
+      await resetToBranch(projectPath, branch);
+      onToast?.(`Reset to ${branch}`, "success");
+      setShowResetConfirm(null);
+      await fetchBranchStatus();
+      onStatusChange();
+    } catch (e) {
+      onToast?.(`Failed to reset: ${e}`, "error");
+    } finally {
+      setIsResetting(false);
+    }
   };
 
   // Vercel URLs - fetched from `vercel alias ls` for real URLs including custom domains
@@ -436,6 +463,49 @@ export function PublishDropdown({
                     </button>
                   </div>
                 </div>
+
+                {/* Reset Option - show when there are local changes */}
+                {hasLocalChanges && (
+                  <div className="publish-reset-section">
+                    <button
+                      className="publish-reset-link"
+                      onClick={() => setShowResetConfirm(branchStatus.staging_exists ? "staging" : "production")}
+                    >
+                      <ResetIcon />
+                      Reset local changes
+                    </button>
+                  </div>
+                )}
+
+                {/* Reset Confirmation */}
+                {showResetConfirm && (
+                  <div className="publish-reset-confirm">
+                    <p>Reset to which version?</p>
+                    <div className="publish-reset-options">
+                      {branchStatus.staging_exists && (
+                        <button
+                          onClick={() => handleReset("staging")}
+                          disabled={isResetting}
+                        >
+                          {isResetting ? "Resetting..." : "Staging"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleReset("production")}
+                        disabled={isResetting}
+                      >
+                        {isResetting ? "Resetting..." : "Production"}
+                      </button>
+                      <button
+                        className="publish-reset-cancel"
+                        onClick={() => setShowResetConfirm(null)}
+                        disabled={isResetting}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </>
             );
           })()}
@@ -511,6 +581,15 @@ function SmallSpinnerIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="spinner-icon">
       <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+    </svg>
+  );
+}
+
+function ResetIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
     </svg>
   );
 }

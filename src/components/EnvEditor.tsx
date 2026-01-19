@@ -15,9 +15,10 @@ interface EnvEditorProps {
   projectPath: string;
   isOpen: boolean;
   onClose: () => void;
+  onToast?: (message: string, type?: "success" | "error") => void;
 }
 
-export function EnvEditor({ projectPath, isOpen, onClose }: EnvEditorProps) {
+export function EnvEditor({ projectPath, isOpen, onClose, onToast }: EnvEditorProps) {
   const [envFiles, setEnvFiles] = useState<EnvFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<EnvFile | null>(null);
   const [vars, setVars] = useState<EnvVar[]>([]);
@@ -131,8 +132,10 @@ export function EnvEditor({ projectPath, isOpen, onClose }: EnvEditorProps) {
       setHasChanges(false);
       // Re-check sync status after saving
       checkSyncStatus(envFiles);
+      onToast?.(`Saved ${selectedFile.name}`, "success");
     } catch (e) {
       setError(`Failed to save ${selectedFile.name}`);
+      onToast?.(`Failed to save ${selectedFile.name}`, "error");
       console.error(e);
     } finally {
       setIsSaving(false);
@@ -200,7 +203,6 @@ export function EnvEditor({ projectPath, isOpen, onClose }: EnvEditorProps) {
 
       // Write back to .env.example
       await invoke("write_env_file", { filePath: envExample.path, vars: newVars });
-
       // Refresh sync status
       checkSyncStatus(envFiles);
 
@@ -208,8 +210,10 @@ export function EnvEditor({ projectPath, isOpen, onClose }: EnvEditorProps) {
       if (selectedFile?.name === ".env.example" || selectedFile?.name === ".env") {
         loadVars();
       }
+      onToast?.("Synced keys to .env.example", "success");
     } catch (e) {
       setError("Failed to sync to .env.example");
+      onToast?.("Failed to sync to .env.example", "error");
       console.error(e);
     }
   };
@@ -242,8 +246,10 @@ export function EnvEditor({ projectPath, isOpen, onClose }: EnvEditorProps) {
       if (selectedFile?.name === ".env.local") {
         loadVars();
       }
+      onToast?.("Added missing keys to .env.local", "success");
     } catch (e) {
       setError("Failed to sync to .env.local");
+      onToast?.("Failed to sync to .env.local", "error");
       console.error(e);
     }
   };
@@ -251,17 +257,20 @@ export function EnvEditor({ projectPath, isOpen, onClose }: EnvEditorProps) {
   const handleCreateFile = async () => {
     if (!newFileName.trim()) return;
 
+    const fileName = newFileName.trim();
     try {
       const path = await invoke<string>("create_env_file", {
         projectPath,
-        fileName: newFileName.trim()
+        fileName
       });
       setShowNewFileInput(false);
       setNewFileName(".env.local");
       await loadEnvFiles();
-      setSelectedFile({ name: newFileName.trim(), path });
+      setSelectedFile({ name: fileName, path });
+      onToast?.(`Created ${fileName}`, "success");
     } catch (e) {
       setError(e as string);
+      onToast?.(`Failed to create ${fileName}`, "error");
     }
   };
 
@@ -270,13 +279,16 @@ export function EnvEditor({ projectPath, isOpen, onClose }: EnvEditorProps) {
 
     if (!confirm(`Delete ${selectedFile.name}? This cannot be undone.`)) return;
 
+    const fileName = selectedFile.name;
     try {
       await invoke("delete_env_file", { filePath: selectedFile.path });
       setSelectedFile(null);
       setVars([]);
       await loadEnvFiles();
+      onToast?.(`Deleted ${fileName}`, "success");
     } catch (e) {
-      setError(`Failed to delete ${selectedFile.name}`);
+      setError(`Failed to delete ${fileName}`);
+      onToast?.(`Failed to delete ${fileName}`, "error");
     }
   };
 

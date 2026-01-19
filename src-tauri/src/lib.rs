@@ -1377,6 +1377,37 @@ async fn get_project_vercel_status(project_path: String) -> ProjectVercelStatus 
         }
     }
 
+    // If no staging URL from aliases, check vercel list for staging deployments
+    if staging_url.is_none() {
+        let list_output = get_vercel_command()
+            .args(["list", "--limit", "20"])
+            .current_dir(&project)
+            .output()
+            .ok();
+
+        if let Some(output) = list_output {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            // Look for staging branch deployments
+            for line in stdout.lines() {
+                let line_lower = line.to_lowercase();
+                // Check if this line mentions staging branch
+                if line_lower.contains("staging") {
+                    // Extract the URL from the line (usually first column or contains .vercel.app)
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    for part in parts {
+                        if part.contains(".vercel.app") || part.contains("-git-staging-") {
+                            staging_url = Some(part.to_string());
+                            break;
+                        }
+                    }
+                    if staging_url.is_some() {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     ProjectVercelStatus {
         status: "connected".to_string(),
         project_name,
@@ -2204,6 +2235,56 @@ async fn get_branch_status(project_path: String) -> Result<BranchStatus, String>
     })
 }
 
+/// Reset local changes to match a remote branch (staging or main/production)
+#[tauri::command]
+async fn reset_to_branch(project_path: String, branch: String) -> Result<(), String> {
+    let validated_path = validate_project_path(&project_path)?;
+
+    // Validate branch name
+    let remote_branch = match branch.as_str() {
+        "staging" => "origin/staging",
+        "production" | "main" => "origin/main",
+        _ => return Err("Invalid branch. Use 'staging' or 'production'.".to_string()),
+    };
+
+    // Fetch latest from remote first
+    let fetch = Command::new("git")
+        .args(["fetch", "origin"])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !fetch.status.success() {
+        return Err("Failed to fetch from remote".to_string());
+    }
+
+    // Reset hard to the remote branch
+    let reset = Command::new("git")
+        .args(["reset", "--hard", remote_branch])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !reset.status.success() {
+        let stderr = String::from_utf8_lossy(&reset.stderr);
+        return Err(format!("Failed to reset: {}", stderr));
+    }
+
+    // Clean untracked files
+    let clean = Command::new("git")
+        .args(["clean", "-fd"])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !clean.status.success() {
+        // Non-fatal, just log it
+        eprintln!("Warning: git clean failed");
+    }
+
+    Ok(())
+}
+
 #[derive(Deserialize)]
 struct SpawnPtyOptions {
     cwd: String,
@@ -2380,6 +2461,7 @@ pub fn run() {
             publish_to_production,
             get_vercel_deployments,
             get_branch_status,
+            reset_to_branch,
             spawn_pty,
         ])
         .run(tauri::generate_context!())

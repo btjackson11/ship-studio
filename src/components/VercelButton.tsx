@@ -20,6 +20,7 @@ interface VercelButtonProps {
   onStatusChange: (deployedUrl?: string) => void;
   onVercelConnect: () => void;
   onModalClose?: () => void;
+  onToast?: (message: string, type?: "success" | "error") => void;
 }
 
 export function VercelButton({
@@ -31,6 +32,7 @@ export function VercelButton({
   onStatusChange,
   onVercelConnect,
   onModalClose,
+  onToast,
 }: VercelButtonProps) {
   const [isInstalling, setIsInstalling] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -72,8 +74,10 @@ export function VercelButton({
     try {
       await installVercelCli();
       onVercelConnect();
+      onToast?.("Vercel CLI installed!", "success");
     } catch (e) {
       setError(String(e));
+      onToast?.("Failed to install Vercel CLI", "error");
     } finally {
       setIsInstalling(false);
     }
@@ -120,6 +124,7 @@ export function VercelButton({
             if (status.authenticated) {
               setShowLoginModal(false);
               onVercelConnect();
+              onToast?.("Connected to Vercel!", "success");
             }
           }
         }
@@ -154,8 +159,10 @@ export function VercelButton({
         githubRepo: projectGithubStatus?.github_repo || undefined,
       });
       onStatusChange(deployedUrl);
+      onToast?.("Connected to Vercel!", "success");
     } catch (e) {
       setError(String(e));
+      onToast?.("Failed to connect to Vercel", "error");
     } finally {
       setIsDeploying(false);
     }

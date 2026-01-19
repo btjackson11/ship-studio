@@ -2320,6 +2320,79 @@ button:hover {
   background: var(--border);
 }
 
+/* Reset Section */
+.publish-reset-section {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.publish-reset-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.publish-reset-link:hover {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.publish-reset-confirm {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-tertiary);
+}
+
+.publish-reset-confirm p {
+  margin: 0 0 10px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.publish-reset-options {
+  display: flex;
+  gap: 8px;
+}
+
+.publish-reset-options button {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.publish-reset-options button:hover:not(:disabled) {
+  background: var(--border);
+}
+
+.publish-reset-options button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.publish-reset-cancel {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--text-muted) !important;
+}
+
+.publish-reset-cancel:hover:not(:disabled) {
+  color: var(--text-secondary) !important;
+  background: transparent !important;
+}
+
 .publish-success-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2486,6 +2559,9 @@ button:hover {
 
 .toast-icon {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .toast-message {

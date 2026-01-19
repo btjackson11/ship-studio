@@ -135,11 +135,15 @@ function App() {
 
   const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
     const id = ++toastIdRef.current;
-    setToasts(prev => [...prev, { id, message, type }]);
-    // Auto-dismiss after 5 seconds
+    setToasts(prev => {
+      // Keep max 5 toasts, remove oldest if needed
+      const updated = [...prev, { id, message, type }];
+      return updated.slice(-5);
+    });
+    // Auto-dismiss after 4 seconds
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, 5000);
+    }, 4000);
   }, []);
 
   const dismissToast = useCallback((id: number) => {
@@ -538,6 +542,7 @@ function App() {
             onStatusChange={handleGitHubStatusChange}
             onGitHubConnect={refreshGitHubStatus}
             onModalClose={focusTerminal}
+            onToast={showToast}
           />
           <VercelButton
             vercelState={integrations.vercel}
@@ -548,6 +553,7 @@ function App() {
             onStatusChange={handleVercelStatusChange}
             onVercelConnect={refreshVercelStatus}
             onModalClose={focusTerminal}
+            onToast={showToast}
           />
           <PublishDropdown
             projectGithubStatus={integrations.projectGithub}
@@ -633,6 +639,7 @@ function App() {
           setShowEnvEditor(false);
           focusTerminal();
         }}
+        onToast={showToast}
       />
 
       {/* Toast notifications */}

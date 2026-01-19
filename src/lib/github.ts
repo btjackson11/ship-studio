@@ -73,3 +73,7 @@ export interface BranchStatus {
 export async function getBranchStatus(projectPath: string): Promise<BranchStatus> {
   return invoke<BranchStatus>("get_branch_status", { projectPath });
 }
+
+export async function resetToBranch(projectPath: string, branch: "staging" | "production"): Promise<void> {
+  return invoke("reset_to_branch", { projectPath, branch });
+}

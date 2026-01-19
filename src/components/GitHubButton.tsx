@@ -13,6 +13,7 @@ interface GitHubButtonProps {
   onStatusChange: () => void;
   onGitHubConnect: () => void;
   onModalClose?: () => void;
+  onToast?: (message: string, type?: "success" | "error") => void;
 }
 
 export function GitHubButton({
@@ -24,6 +25,7 @@ export function GitHubButton({
   onStatusChange,
   onGitHubConnect,
   onModalClose,
+  onToast,
 }: GitHubButtonProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [repoName, setRepoName] = useState(projectName);
@@ -212,6 +214,7 @@ export function GitHubButton({
 
                     // Refresh status - this will clear isCreatingRepo when status updates
                     onStatusChange();
+                    onToast?.("Repository created!", "success");
 
                     // Fallback: clear isCreatingRepo after a delay if status doesn't update
                     setTimeout(() => {
@@ -219,6 +222,7 @@ export function GitHubButton({
                     }, 3000);
                   } catch (e) {
                     setError(String(e));
+                    onToast?.("Failed to create repository", "error");
                     setIsLoading(false);
                     setIsCreatingRepo(false);
                   }
