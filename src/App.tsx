@@ -53,6 +53,7 @@ import {
   ProjectVercelStatus,
 } from "./lib/vercel";
 import { checkClaudeCliStatus, ClaudeCliStatus } from "./lib/claude";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { invoke } from "@tauri-apps/api/core";
 import "./styles/index.css";
 
@@ -554,6 +555,7 @@ function App() {
   if (view === "projects") {
     return (
       <div className="app">
+        <UpdateBanner />
         <ProjectList
           onSelectProject={handleSelectProject}
           onCreateProject={handleCreateProject}
@@ -586,6 +588,7 @@ function App() {
   // Workspace view
   return (
     <div className="app workspace">
+      <UpdateBanner />
       <header className="workspace-header">
         <button
           className="back-button"

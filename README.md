@@ -57,6 +57,55 @@ pnpm tauri build
 # The built app will be in src-tauri/target/release/bundle/
 ```
 
+## Releases and Auto-Updates
+
+Marketingstack includes built-in auto-update functionality. When a new version is available, users see a banner at the top of the app with the option to update and restart.
+
+### Setting Up GitHub Secrets
+
+Before creating releases, add these secrets to your GitHub repository (Settings → Secrets → Actions):
+
+1. **`TAURI_SIGNING_PRIVATE_KEY`** - The private key for signing update artifacts. Located at `~/.tauri/marketingstack.key`
+2. **`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`** - Password for the key (can be empty if none was set)
+
+### Creating a Release
+
+1. Update the version in `src-tauri/tauri.conf.json`:
+   ```json
+   {
+     "version": "1.0.0"
+   }
+   ```
+
+2. Commit and push the version bump:
+   ```bash
+   git add src-tauri/tauri.conf.json
+   git commit -m "Bump version to 1.0.0"
+   git push
+   ```
+
+3. Create and push a version tag:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+4. GitHub Actions will automatically:
+   - Build the app for macOS (Intel + Apple Silicon)
+   - Sign the update artifacts
+   - Create a draft release with all assets
+   - Generate `latest.json` for the updater
+
+5. Review and publish the draft release on GitHub.
+
+### How Auto-Updates Work
+
+- On app launch (after 5 seconds), and every hour, the app checks for updates
+- It fetches `latest.json` from the GitHub releases
+- If a newer version exists, a banner appears with "Update" button
+- Clicking "Update" downloads the update with a progress bar
+- Once complete, "Restart Now" restarts the app with the new version
+
 ## Development Setup
 
 ### 1. Install Rust

@@ -2853,6 +2853,8 @@ pub fn run() {
         .plugin(tauri_plugin_pty::init())
         .plugin(tauri_plugin_screenshots::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .on_window_event(|_window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 cleanup_claude_processes();
