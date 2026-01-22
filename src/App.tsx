@@ -24,8 +24,21 @@ import { OnboardingScreen } from "./components/setup";
 import { SplitPane } from "./components/SplitPane";
 import { GitHubButton } from "./components/GitHubButton";
 import { VercelButton } from "./components/VercelButton";
-import { PublishDropdown } from "./components/PublishDropdown";
+import { PublishBranchDropdown } from "./components/PublishBranchDropdown";
 import { EnvEditor } from "./components/EnvEditor";
+import { BranchIndicator } from "./components/BranchIndicator";
+import { BranchSelectorModal } from "./components/BranchSelectorModal";
+import { BranchesTab } from "./components/BranchesTab";
+import { PullRequestsTab } from "./components/PullRequestsTab";
+import { GitErrorHandler } from "./components/GitErrorHandler";
+import { SubmitReviewModal } from "./components/SubmitReviewModal";
+import {
+  BranchInfo,
+  listBranches,
+  getCurrentBranch,
+  switchBranch,
+  createBranch,
+} from "./lib/branches";
 import {
   CodeIcon,
   ChatIcon,
@@ -36,6 +49,9 @@ import {
   CloseIcon,
   VSCodeIcon,
   CursorIcon,
+  BranchIcon,
+  PullRequestIcon,
+  EyeIcon,
 } from "./components/icons";
 import { startDevServer, Project, DevServerHandle } from "./lib/project";
 import {
@@ -188,6 +204,30 @@ function App() {
 
   // Vercel auto-connecting state (when linking after GitHub repo creation)
   const [isVercelAutoConnecting, setIsVercelAutoConnecting] = useState(false);
+
+  // Branch management state
+  const [currentBranch, setCurrentBranch] = useState<string | null>(null);
+  const [branches, setBranches] = useState<BranchInfo[]>([]);
+  const [hasUncommittedChanges, setHasUncommittedChanges] = useState(false);
+  const [showBranchSelector, setShowBranchSelector] = useState(false);
+  const [branchSelectorCreateMode, setBranchSelectorCreateMode] = useState(false);
+  const [showSubmitReview, setShowSubmitReview] = useState<string | null>(null);
+  const [isBranchSwitching, setIsBranchSwitching] = useState(false);
+  const [gitError, setGitError] = useState<{
+    errorType: "push_rejected" | "auth_error" | "merge_conflict" | "generic";
+    message: string;
+    branchName: string;
+  } | null>(null);
+
+  // Workspace tab state (preview/branches/prs)
+  const [workspaceTab, setWorkspaceTab] = useState<"preview" | "branches" | "prs">("preview");
+
+  // Reset to preview tab if on branches/prs and GitHub is not connected
+  useEffect(() => {
+    if (integrations.projectGithub?.status !== "connected" && workspaceTab !== "preview") {
+      setWorkspaceTab("preview");
+    }
+  }, [integrations.projectGithub?.status, workspaceTab]);
 
   const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
     const id = ++toastIdRef.current;
@@ -353,6 +393,73 @@ function App() {
     setIsCropCapturing(false);
   }, []);
 
+  // Fetch branch info for a project
+  const fetchBranchInfo = useCallback(async (projectPath: string) => {
+    try {
+      const [branch, branchList] = await Promise.all([
+        getCurrentBranch(projectPath).catch(() => null),
+        listBranches(projectPath).catch(() => []),
+      ]);
+      setCurrentBranch(branch);
+      setBranches(branchList);
+
+      // Check for uncommitted changes using the backend
+      invoke<boolean>("check_git_has_changes", { projectPath })
+        .then(hasChanges => setHasUncommittedChanges(hasChanges))
+        .catch(() => setHasUncommittedChanges(false));
+    } catch (e) {
+      console.error("Failed to fetch branch info:", e);
+      setCurrentBranch(null);
+      setBranches([]);
+    }
+  }, []);
+
+  // Handle branch switch
+  const handleBranchSwitch = useCallback(async (branchName: string) => {
+    setIsBranchSwitching(true);
+    setCurrentBranch(branchName);
+    if (currentProject) {
+      await fetchBranchInfo(currentProject.path);
+    }
+    // Refresh preview after Next.js has time to detect file changes and rebuild
+    setTimeout(() => previewRef.current?.refresh(), 300);
+    setTimeout(() => {
+      previewRef.current?.refresh();
+      setIsBranchSwitching(false);
+    }, 2500);
+  }, [currentProject, fetchBranchInfo]);
+
+  // Handle creating a new branch
+  const handleCreateBranch = useCallback(async (branchName: string, fromBranch: string) => {
+    if (!currentProject) return;
+    setIsBranchSwitching(true);
+    await createBranch(currentProject.path, branchName, fromBranch);
+    setCurrentBranch(branchName);
+    await fetchBranchInfo(currentProject.path);
+    // Refresh preview after Next.js has time to detect file changes and rebuild
+    setTimeout(() => previewRef.current?.refresh(), 300);
+    setTimeout(() => {
+      previewRef.current?.refresh();
+      setIsBranchSwitching(false);
+    }, 2500);
+  }, [currentProject, fetchBranchInfo]);
+
+  // Handle publish error
+  const handlePublishError = useCallback((error: string, errorType: "push_rejected" | "auth_error" | "generic") => {
+    if (currentBranch) {
+      setGitError({
+        errorType,
+        message: error,
+        branchName: currentBranch,
+      });
+    }
+  }, [currentBranch]);
+
+  // Send prompt to Claude terminal
+  const sendToClaude = useCallback((prompt: string) => {
+    terminalRef.current?.paste(prompt);
+  }, []);
+
   // Handle terminal exit (memoized to prevent re-spawning Claude on every render)
   const handleTerminalExit = useCallback((code: number | null) => {
     console.log("Terminal exited with code:", code);
@@ -426,6 +533,9 @@ function App() {
       dispatch({ type: 'CLEAR_PROJECT_STATUSES' });
     }
 
+    // Fetch branch info
+    await fetchBranchInfo(project.path);
+
     // Start dev server in background
     try {
       devServerRef.current = await startDevServer(project.path);
@@ -466,6 +576,11 @@ function App() {
     // Reset publishing and auto-connecting state
     setIsPublishing(false);
     setIsVercelAutoConnecting(false);
+
+    // Clear branch state
+    setCurrentBranch(null);
+    setBranches([]);
+    setHasUncommittedChanges(false);
 
     // Stop dev server if running
     if (devServerRef.current) {
@@ -652,15 +767,21 @@ function App() {
             onToast={showToast}
             isAutoConnecting={isVercelAutoConnecting}
           />
-          <PublishDropdown
+          <PublishBranchDropdown
+            currentBranch={currentBranch || "main"}
             projectGithubStatus={integrations.projectGithub}
             projectVercelStatus={integrations.projectVercel}
             projectPath={currentProject?.path || ""}
-            onStatusChange={handleGitHubStatusChange}
+            hasUncommittedChanges={hasUncommittedChanges}
+            onStatusChange={() => {
+              handleGitHubStatusChange();
+              if (currentProject) fetchBranchInfo(currentProject.path);
+            }}
             onModalClose={focusTerminal}
             onToast={showToast}
             isPublishing={isPublishing}
             setIsPublishing={setIsPublishing}
+            onPublishError={handlePublishError}
           />
         </div>
       </header>
@@ -716,18 +837,107 @@ function App() {
           }
           right={
             <div className="preview-pane">
-              <Preview
-                key={currentProject?.path || "none"}
-                ref={previewRef}
-                port={DEV_SERVER_PORT}
-                projectPath={currentProject?.path || ""}
-                onServerReady={handlePreviewReady}
-                onPageChange={setCurrentPreviewPage}
-                isCropMode={isCropMode}
-                onCropStart={handleCropStart}
-                onCropComplete={handleCropComplete}
-                onCropCancel={handleCropCancel}
-              />
+              {/* Preview/Branches/PRs Tabs - only show branch tabs when GitHub repo exists */}
+              {integrations.projectGithub?.status === "connected" ? (
+                <div className="preview-tabs-bar">
+                  {/* Branch Indicator */}
+                  {currentBranch && (
+                    <BranchIndicator
+                      currentBranch={currentBranch}
+                      hasUncommittedChanges={hasUncommittedChanges}
+                      branches={branches}
+                      projectPath={currentProject?.path || ""}
+                      onBranchSwitch={handleBranchSwitch}
+                      onOpenBranchSelector={() => {
+                        setBranchSelectorCreateMode(false);
+                        setShowBranchSelector(true);
+                      }}
+                      onCreateBranch={() => {
+                        setBranchSelectorCreateMode(true);
+                        setShowBranchSelector(true);
+                      }}
+                      onToast={showToast}
+                    />
+                  )}
+                  <div className="workspace-tabs">
+                    <button
+                      className={`workspace-tab ${workspaceTab === "preview" ? "active" : ""}`}
+                      onClick={() => setWorkspaceTab("preview")}
+                    >
+                      <EyeIcon size={14} />
+                      <span>Preview</span>
+                    </button>
+                    <button
+                      className={`workspace-tab ${workspaceTab === "branches" ? "active" : ""}`}
+                      onClick={() => setWorkspaceTab("branches")}
+                    >
+                      <BranchIcon size={14} />
+                      <span>Branches</span>
+                    </button>
+                    <button
+                      className={`workspace-tab ${workspaceTab === "prs" ? "active" : ""}`}
+                      onClick={() => setWorkspaceTab("prs")}
+                    >
+                      <PullRequestIcon size={14} />
+                      <span>PRs</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="preview-tabs-bar preview-tabs-bar-simple">
+                  <span className="preview-label">Preview</span>
+                </div>
+              )}
+
+              {/* Tab content */}
+              {workspaceTab === "preview" && (
+                <Preview
+                  key={currentProject?.path || "none"}
+                  ref={previewRef}
+                  port={DEV_SERVER_PORT}
+                  projectPath={currentProject?.path || ""}
+                  onServerReady={handlePreviewReady}
+                  onPageChange={setCurrentPreviewPage}
+                  isCropMode={isCropMode}
+                  onCropStart={handleCropStart}
+                  onCropComplete={handleCropComplete}
+                  onCropCancel={handleCropCancel}
+                  isBranchSwitching={isBranchSwitching}
+                />
+              )}
+              {workspaceTab === "branches" && currentProject && (
+                <BranchesTab
+                  branches={branches}
+                  currentBranch={currentBranch || ""}
+                  projectPath={currentProject.path}
+                  githubUsername={integrations.github.username}
+                  onBranchSwitch={async (branchName) => {
+                    const result = await switchBranch(currentProject.path, branchName, true);
+                    if (result.success) {
+                      await handleBranchSwitch(branchName);
+                      if (result.stashedChanges) {
+                        showToast("Switched branch (changes stashed)", "success");
+                      } else {
+                        showToast(`Switched to ${branchName}`, "success");
+                      }
+                    } else {
+                      showToast(result.error || "Failed to switch branch", "error");
+                    }
+                  }}
+                  onSubmitForReview={(branchName) => setShowSubmitReview(branchName)}
+                  onRefresh={() => fetchBranchInfo(currentProject.path)}
+                  onToast={showToast}
+                />
+              )}
+              {workspaceTab === "prs" && currentProject && (
+                <PullRequestsTab
+                  projectPath={currentProject.path}
+                  githubUsername={integrations.github.username}
+                  onRefresh={() => fetchBranchInfo(currentProject.path)}
+                  onToast={showToast}
+                  onBranchSwitch={handleBranchSwitch}
+                />
+              )}
             </div>
           }
         />
@@ -762,6 +972,67 @@ function App() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Branch Selector Modal */}
+      {showBranchSelector && (
+        <BranchSelectorModal
+          projectPath={currentProject?.path || ""}
+          projectName={currentProject?.name || ""}
+          branches={branches}
+          currentBranch={currentBranch}
+          githubUsername={integrations.github.username}
+          createMode={branchSelectorCreateMode}
+          onSelectBranch={async (branchName) => {
+            if (!currentProject) return;
+            const result = await switchBranch(currentProject.path, branchName, true);
+            if (result.success) {
+              await handleBranchSwitch(branchName);
+              if (result.stashedChanges) {
+                showToast("Switched branch (changes stashed)", "success");
+              }
+            } else {
+              showToast(result.error || "Failed to switch branch", "error");
+              throw new Error(result.error || "Failed to switch branch");
+            }
+          }}
+          onCreateBranch={handleCreateBranch}
+          onClose={() => {
+            setShowBranchSelector(false);
+            setBranchSelectorCreateMode(false);
+            focusTerminal();
+          }}
+        />
+      )}
+
+      {/* Submit for Review Modal */}
+      {showSubmitReview && (
+        <SubmitReviewModal
+          projectPath={currentProject?.path || ""}
+          branchName={showSubmitReview}
+          baseBranches={branches.filter(b => b.isDefault || b.name === "staging").map(b => b.name)}
+          onSuccess={() => {
+            showToast("Pull request created", "success");
+            if (currentProject) fetchBranchInfo(currentProject.path);
+          }}
+          onClose={() => {
+            setShowSubmitReview(null);
+            focusTerminal();
+          }}
+          onToast={showToast}
+        />
+      )}
+
+      {/* Git Error Handler */}
+      {gitError && (
+        <GitErrorHandler
+          errorType={gitError.errorType}
+          errorMessage={gitError.message}
+          branchName={gitError.branchName}
+          onClose={() => setGitError(null)}
+          onSendToClaude={sendToClaude}
+          onToast={showToast}
+        />
       )}
     </div>
   );

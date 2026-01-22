@@ -86,20 +86,24 @@ interface PreviewProps {
   onCropComplete?: (filePath: string | null) => void;
   /** Callback fired when user cancels crop mode (Escape key) */
   onCropCancel?: () => void;
+  /** Whether a branch switch is in progress */
+  isBranchSwitching?: boolean;
 }
 
 /**
  * Handle exposed to parent components via ref.
- * Allows programmatic screenshot capture.
+ * Allows programmatic screenshot capture and refresh.
  */
 export interface PreviewHandle {
   /** Capture the current preview viewport and return the saved file path */
   captureForClaude: () => Promise<string | null>;
   /** Check if a capture is currently in progress */
   isCapturing: () => boolean;
+  /** Force refresh the preview iframe */
+  refresh: () => void;
 }
 
-export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview({ port = 3000, projectPath, onServerReady, onPageChange, isCropMode, onCropStart, onCropComplete, onCropCancel }, ref) {
+export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview({ port = 3000, projectPath, onServerReady, onPageChange, isCropMode, onCropStart, onCropComplete, onCropCancel, isBranchSwitching = false }, ref) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -441,11 +445,42 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     }
   }, [isCropMode]);
 
+  // Force refresh the preview iframe with cache busting
+  const refresh = useCallback(() => {
+    if (iframeRef.current && serverReady) {
+      // Parse current URL and add/update cache-busting parameter
+      const currentSrc = iframeRef.current.src;
+      try {
+        const url = new URL(currentSrc);
+        // Remove old cache buster if present
+        url.searchParams.delete('_refresh');
+        // Add new cache buster
+        url.searchParams.set('_refresh', Date.now().toString());
+        // Set to blank first to ensure full reload
+        iframeRef.current.src = "about:blank";
+        setTimeout(() => {
+          if (iframeRef.current) {
+            iframeRef.current.src = url.toString();
+          }
+        }, 100);
+      } catch {
+        // Fallback: just reload current src
+        iframeRef.current.src = "about:blank";
+        setTimeout(() => {
+          if (iframeRef.current) {
+            iframeRef.current.src = currentSrc;
+          }
+        }, 100);
+      }
+    }
+  }, [serverReady]);
+
   // Expose methods to parent
   useImperativeHandle(ref, () => ({
     captureForClaude,
     isCapturing: () => isCapturing,
-  }), [captureForClaude, isCapturing]);
+    refresh,
+  }), [captureForClaude, isCapturing, refresh]);
 
   // Open CMS modal with native webview
   const handleOpenCms = () => {
@@ -685,6 +720,13 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
             className="preview-iframe"
             title="Preview"
           />
+          {/* Branch switching overlay */}
+          {isBranchSwitching && (
+            <div className="preview-branch-switching-overlay">
+              <div className="preview-branch-switching-spinner" />
+              <span>Switching branch...</span>
+            </div>
+          )}
           {/* Crop selection overlay */}
           {isCropMode && (
             <div
