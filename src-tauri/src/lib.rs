@@ -2986,6 +2986,24 @@ fn get_brew_command() -> Option<std::path::PathBuf> {
 /// Get full setup status for all items
 #[tauri::command]
 async fn get_full_setup_status() -> FullSetupStatus {
+    // Debug mode: return all items as not installed for testing onboarding flow
+    if std::env::var("MARKETINGSTACK_FORCE_SETUP").is_ok() {
+        return FullSetupStatus {
+            all_ready: false,
+            items: vec![
+                SetupItemInfo { id: "homebrew".to_string(), friendly_name: "Package Manager".to_string(), status: SetupItemStatus::NotInstalled, version: None, username: None, error_message: None },
+                SetupItemInfo { id: "node".to_string(), friendly_name: "Node.js".to_string(), status: SetupItemStatus::NotInstalled, version: None, username: None, error_message: None },
+                SetupItemInfo { id: "git".to_string(), friendly_name: "Git".to_string(), status: SetupItemStatus::NotInstalled, version: None, username: None, error_message: None },
+                SetupItemInfo { id: "gh".to_string(), friendly_name: "GitHub CLI".to_string(), status: SetupItemStatus::NotInstalled, version: None, username: None, error_message: None },
+                SetupItemInfo { id: "gh_auth".to_string(), friendly_name: "GitHub Account".to_string(), status: SetupItemStatus::NotInstalled, version: None, username: None, error_message: None },
+                SetupItemInfo { id: "claude".to_string(), friendly_name: "Claude Code".to_string(), status: SetupItemStatus::NotInstalled, version: None, username: None, error_message: None },
+                SetupItemInfo { id: "claude_auth".to_string(), friendly_name: "Claude Account".to_string(), status: SetupItemStatus::NotInstalled, version: None, username: None, error_message: None },
+                SetupItemInfo { id: "vercel".to_string(), friendly_name: "Vercel CLI".to_string(), status: SetupItemStatus::NotInstalled, version: None, username: None, error_message: None },
+                SetupItemInfo { id: "vercel_auth".to_string(), friendly_name: "Vercel Account".to_string(), status: SetupItemStatus::NotInstalled, version: None, username: None, error_message: None },
+            ],
+        };
+    }
+
     let mut items = Vec::new();
 
     // 1. Homebrew
