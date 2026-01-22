@@ -3381,8 +3381,6 @@ async fn get_deployment_status(project_path: String) -> Result<Option<Deployment
     // Parse text output - find first deployment line with URL
     // Format: "  Age     https://project-xxx.vercel.app     ● Ready     Environment     Duration     Username"
     for line in stdout.lines() {
-        let line = line.trim();
-
         // Skip header and non-deployment lines
         if !line.contains("https://") || !line.contains(".vercel.app") {
             continue;
@@ -3393,19 +3391,19 @@ async fn get_deployment_status(project_path: String) -> Result<Option<Deployment
             .find(|s| s.starts_with("https://"))
             .map(|s| s.to_string());
 
-        // Extract status (● Ready, ● Error, ○ Building, ◌ Queued, etc.)
-        let state = if line.contains("● Ready") {
+        // Extract status - look for status words (ignore bullet chars which have encoding issues)
+        let state = if line.contains(" Ready") {
             "READY"
-        } else if line.contains("● Error") {
+        } else if line.contains(" Error") {
             "ERROR"
-        } else if line.contains("○ Building") {
+        } else if line.contains(" Building") {
             "BUILDING"
-        } else if line.contains("◌ Queued") || line.contains("○ Queued") {
+        } else if line.contains(" Queued") {
             "QUEUED"
-        } else if line.contains("● Canceled") {
+        } else if line.contains(" Canceled") {
             "CANCELED"
         } else {
-            "UNKNOWN"
+            "BUILDING" // Default to building if unknown
         };
 
         return Ok(Some(DeploymentStatus {
