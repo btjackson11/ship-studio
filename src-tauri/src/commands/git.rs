@@ -1,0 +1,731 @@
+//! # Git Commands
+//!
+//! Commands for Git operations, branch management, and repository management.
+
+use std::process::Command;
+use crate::types::{BranchInfo, BranchStatus, PrerequisiteCheck, SwitchResult};
+use crate::utils::{find_executable, validate_project_path};
+
+// ============ Git Helper Functions ============
+
+/// Checks if there are uncommitted changes (staged or unstaged tracked files).
+pub fn git_has_uncommitted_changes(path: &std::path::Path) -> Result<bool, String> {
+    let status = Command::new("git")
+        .args(["status", "--porcelain", "-uno"])
+        .current_dir(path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    Ok(!String::from_utf8_lossy(&status.stdout).trim().is_empty())
+}
+
+/// Checks if there are any changes (including untracked) in the working directory.
+pub fn git_has_any_changes(path: &std::path::Path) -> Result<bool, String> {
+    let status = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    Ok(!String::from_utf8_lossy(&status.stdout).trim().is_empty())
+}
+
+/// Stages all changes and commits with the given message.
+/// Returns true if a commit was made, false if nothing to commit.
+pub fn git_stage_and_commit(path: &std::path::Path, message: &str) -> Result<bool, String> {
+    // Stage all changes
+    let add_output = Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !add_output.status.success() {
+        return Err(String::from_utf8_lossy(&add_output.stderr).to_string());
+    }
+
+    // Check if there are staged changes to commit
+    let has_changes = git_has_any_changes(path)?;
+
+    if !has_changes {
+        return Ok(false);
+    }
+
+    // Commit
+    let commit_output = Command::new("git")
+        .args(["commit", "-m", message])
+        .current_dir(path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !commit_output.status.success() {
+        return Err(String::from_utf8_lossy(&commit_output.stderr).to_string());
+    }
+
+    Ok(true)
+}
+
+/// Calculates how many commits `branch` is ahead/behind compared to `compare_to`.
+pub fn get_ahead_behind(path: &std::path::Path, branch: &str, compare_to: &str) -> (i32, i32) {
+    let output = Command::new("git")
+        .args(["rev-list", "--left-right", "--count", &format!("{}...{}", branch, compare_to)])
+        .current_dir(path)
+        .output();
+
+    match output {
+        Ok(out) if out.status.success() => {
+            let counts = String::from_utf8_lossy(&out.stdout);
+            let parts: Vec<&str> = counts.trim().split('\t').collect();
+            if parts.len() == 2 {
+                (
+                    parts[0].parse().unwrap_or(0),
+                    parts[1].parse().unwrap_or(0),
+                )
+            } else {
+                (0, 0)
+            }
+        }
+        _ => (0, 0),
+    }
+}
+
+// ============ Tauri Commands ============
+
+/// Checks if required tools (node, npm, git, gh, vercel, claude) are installed.
+#[tauri::command]
+pub async fn check_prerequisites() -> Vec<PrerequisiteCheck> {
+    let commands = vec!["node", "npm", "git", "gh", "vercel", "claude"];
+    let mut results = Vec::new();
+
+    for cmd in commands {
+        let (available, path) = match find_executable(cmd) {
+            Some(p) => (true, Some(p.to_string_lossy().to_string())),
+            None => (false, None),
+        };
+        results.push(PrerequisiteCheck {
+            name: cmd.to_string(),
+            available,
+            path,
+        });
+    }
+
+    results
+}
+
+/// Returns the path to ~/Marketingstack directory
+#[tauri::command]
+pub async fn get_marketingstack_dir() -> Result<String, String> {
+    let home = dirs::home_dir().ok_or("Could not find home directory")?;
+    let marketingstack_dir = home.join("Marketingstack");
+    Ok(marketingstack_dir.to_string_lossy().to_string())
+}
+
+/// Creates ~/Marketingstack directory if it doesn't exist
+#[tauri::command]
+pub async fn ensure_marketingstack_dir() -> Result<String, String> {
+    let home = dirs::home_dir().ok_or("Could not find home directory")?;
+    let marketingstack_dir = home.join("Marketingstack");
+
+    if !marketingstack_dir.exists() {
+        std::fs::create_dir_all(&marketingstack_dir).map_err(|e| e.to_string())?;
+    }
+
+    Ok(marketingstack_dir.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn init_git_repo(project_path: String) -> Result<(), String> {
+    let validated_path = validate_project_path(&project_path)?;
+
+    // Initialize git repo
+    let output = Command::new("git")
+        .args(["init"])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    // Stage and commit all files
+    git_stage_and_commit(&validated_path, "Initial commit from Marketingstack")?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn check_git_has_changes(project_path: String) -> Result<bool, String> {
+    let project = validate_project_path(&project_path)?;
+    let git_dir = project.join(".git");
+
+    // Not a git repo = no changes to track
+    if !git_dir.exists() {
+        return Ok(false);
+    }
+
+    // Check for uncommitted changes (staged or unstaged tracked files only)
+    if git_has_uncommitted_changes(&project)? {
+        return Ok(true);
+    }
+
+    // Check for unpushed commits
+    let unpushed = Command::new("git")
+        .args(["log", "@{u}..", "--oneline"])
+        .current_dir(&project)
+        .output();
+
+    match unpushed {
+        Ok(output) => {
+            let has_unpushed = !String::from_utf8_lossy(&output.stdout).trim().is_empty();
+            Ok(has_unpushed)
+        }
+        Err(_) => {
+            // No upstream set, check if we have commits
+            let commits = Command::new("git")
+                .args(["log", "--oneline", "-1"])
+                .current_dir(&project)
+                .output()
+                .map_err(|e| e.to_string())?;
+
+            Ok(!String::from_utf8_lossy(&commits.stdout).trim().is_empty())
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn get_branch_status(project_path: String) -> Result<BranchStatus, String> {
+    let validated_path = validate_project_path(&project_path)?;
+
+    // Check for local changes (tracked files only)
+    let local_changes = git_has_uncommitted_changes(&validated_path)?;
+
+    // Fetch latest from origin (silently)
+    let _ = Command::new("git")
+        .args(["fetch", "origin"])
+        .current_dir(&validated_path)
+        .output();
+
+    // Check if staging branch exists on remote
+    let staging_check = Command::new("git")
+        .args(["ls-remote", "--heads", "origin", "staging"])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let staging_exists = !String::from_utf8_lossy(&staging_check.stdout).trim().is_empty();
+
+    // Get commits ahead/behind for staging
+    let (staging_ahead, staging_behind) = if staging_exists {
+        let output = Command::new("git")
+            .args(["rev-list", "--left-right", "--count", "HEAD...origin/staging"])
+            .current_dir(&validated_path)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        let counts = String::from_utf8_lossy(&output.stdout);
+        let parts: Vec<&str> = counts.trim().split('\t').collect();
+        if parts.len() == 2 {
+            (
+                parts[0].parse().unwrap_or(0),
+                parts[1].parse().unwrap_or(0),
+            )
+        } else {
+            (0, 0)
+        }
+    } else {
+        (0, 0)
+    };
+
+    // Get commits ahead/behind for main
+    let output = Command::new("git")
+        .args(["rev-list", "--left-right", "--count", "HEAD...origin/main"])
+        .current_dir(&validated_path)
+        .output();
+
+    let (main_ahead, main_behind) = if let Ok(output) = output {
+        let counts = String::from_utf8_lossy(&output.stdout);
+        let parts: Vec<&str> = counts.trim().split('\t').collect();
+        if parts.len() == 2 {
+            (
+                parts[0].parse().unwrap_or(0),
+                parts[1].parse().unwrap_or(0),
+            )
+        } else {
+            (0, 0)
+        }
+    } else {
+        (0, 0)
+    };
+
+    Ok(BranchStatus {
+        local_changes,
+        staging_ahead,
+        staging_behind,
+        main_ahead,
+        main_behind,
+        staging_exists,
+    })
+}
+
+/// Reset local changes to match a remote branch (staging or main/production)
+#[tauri::command]
+pub async fn reset_to_branch(project_path: String, branch: String) -> Result<(), String> {
+    let validated_path = validate_project_path(&project_path)?;
+
+    let remote_branch = match branch.as_str() {
+        "staging" => "origin/staging",
+        "production" | "main" => "origin/main",
+        _ => return Err("Invalid branch. Use 'staging' or 'production'.".to_string()),
+    };
+
+    // Fetch latest from remote first
+    let fetch = Command::new("git")
+        .args(["fetch", "origin"])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !fetch.status.success() {
+        return Err("Failed to fetch from remote".to_string());
+    }
+
+    // Reset hard to the remote branch
+    let reset = Command::new("git")
+        .args(["reset", "--hard", remote_branch])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !reset.status.success() {
+        let stderr = String::from_utf8_lossy(&reset.stderr);
+        return Err(format!("Failed to reset: {}", stderr));
+    }
+
+    // Clean untracked files
+    let clean = Command::new("git")
+        .args(["clean", "-fd"])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !clean.status.success() {
+        eprintln!("Warning: git clean failed");
+    }
+
+    Ok(())
+}
+
+/// List all branches (local and remote) with metadata
+#[tauri::command]
+pub async fn list_branches(project_path: String) -> Result<Vec<BranchInfo>, String> {
+    let validated_path = validate_project_path(&project_path)?;
+
+    // Fetch all remotes first
+    let _ = Command::new("git")
+        .args(["fetch", "--all", "--prune"])
+        .current_dir(&validated_path)
+        .output();
+
+    // Get all branches (local and remote)
+    let output = Command::new("git")
+        .args(["branch", "-a", "--format=%(refname:short)|%(objectname:short)|%(committerdate:unix)|%(authorname)|%(HEAD)"])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err("Failed to list branches".to_string());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut branches: Vec<BranchInfo> = Vec::new();
+    let mut seen_names: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for line in stdout.lines() {
+        let parts: Vec<&str> = line.split('|').collect();
+        if parts.len() < 5 {
+            continue;
+        }
+
+        let raw_name = parts[0].trim();
+        if raw_name == "HEAD" || raw_name.contains("HEAD") || raw_name == "origin" {
+            continue;
+        }
+
+        let (name, is_remote) = if raw_name.starts_with("origin/") {
+            (raw_name.strip_prefix("origin/").unwrap_or(raw_name).to_string(), true)
+        } else {
+            (raw_name.to_string(), false)
+        };
+
+        if name.is_empty() || name == "origin" {
+            continue;
+        }
+
+        if seen_names.contains(&name) {
+            continue;
+        }
+        seen_names.insert(name.clone());
+
+        let is_current = parts[4].trim() == "*";
+        let commit_date = parts[2].parse::<u64>().unwrap_or(0) * 1000;
+        let author = parts[3].to_string();
+        let is_default = name == "main" || name == "master";
+
+        let (ahead, behind) = get_ahead_behind(&validated_path, &name, "origin/main");
+
+        branches.push(BranchInfo {
+            name,
+            is_current,
+            is_remote,
+            is_default,
+            last_commit_date: commit_date,
+            last_commit_author: author,
+            ahead_of_main: ahead,
+            behind_main: behind,
+        });
+    }
+
+    // Sort: current first, then default branches, then by last commit date (newest first)
+    branches.sort_by(|a, b| {
+        if a.is_current != b.is_current {
+            return b.is_current.cmp(&a.is_current);
+        }
+        if a.is_default != b.is_default {
+            return b.is_default.cmp(&a.is_default);
+        }
+        b.last_commit_date.cmp(&a.last_commit_date)
+    });
+
+    Ok(branches)
+}
+
+/// Get the current branch name
+#[tauri::command]
+pub async fn get_current_branch(project_path: String) -> Result<String, String> {
+    let validated_path = validate_project_path(&project_path)?;
+
+    let output = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err("Not a git repository".to_string());
+    }
+
+    let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if branch == "HEAD" {
+        return Err("Detached HEAD state".to_string());
+    }
+
+    Ok(branch)
+}
+
+/// Switch to a different branch
+#[tauri::command]
+pub async fn switch_branch(project_path: String, branch_name: String, auto_stash: bool) -> Result<SwitchResult, String> {
+    let validated_path = validate_project_path(&project_path)?;
+    let mut stashed = false;
+
+    // Check for uncommitted changes
+    let has_changes = git_has_any_changes(&validated_path)?;
+
+    if has_changes && auto_stash {
+        let stash_output = Command::new("git")
+            .args(["stash", "push", "-m", "Auto-stash by Marketingstack"])
+            .current_dir(&validated_path)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if stash_output.status.success() {
+            let stdout = String::from_utf8_lossy(&stash_output.stdout);
+            stashed = !stdout.contains("No local changes");
+        }
+    } else if has_changes && !auto_stash {
+        return Ok(SwitchResult {
+            success: false,
+            stashed_changes: false,
+            error: Some("Uncommitted changes. Please stash or commit them first.".to_string()),
+        });
+    }
+
+    // Try to checkout the branch
+    let checkout_output = Command::new("git")
+        .args(["checkout", &branch_name])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !checkout_output.status.success() {
+        if stashed {
+            let _ = Command::new("git")
+                .args(["stash", "pop"])
+                .current_dir(&validated_path)
+                .output();
+        }
+
+        let stderr = String::from_utf8_lossy(&checkout_output.stderr);
+        return Ok(SwitchResult {
+            success: false,
+            stashed_changes: false,
+            error: Some(stderr.to_string()),
+        });
+    }
+
+    // Pull latest changes from remote
+    let _ = Command::new("git")
+        .args(["pull", "--ff-only"])
+        .current_dir(&validated_path)
+        .output();
+
+    // Touch next.config file to trigger Next.js full rebuild
+    let config_files = ["next.config.js", "next.config.mjs", "next.config.ts"];
+    for config in &config_files {
+        let config_path = validated_path.join(config);
+        if config_path.exists() {
+            let _ = Command::new("touch")
+                .arg(&config_path)
+                .output();
+            break;
+        }
+    }
+
+    Ok(SwitchResult {
+        success: true,
+        stashed_changes: stashed,
+        error: None,
+    })
+}
+
+/// Discard all uncommitted changes in the working directory
+#[tauri::command]
+pub async fn discard_changes(project_path: String) -> Result<(), String> {
+    let validated_path = validate_project_path(&project_path)?;
+
+    // Discard changes to tracked files
+    let checkout_output = Command::new("git")
+        .args(["checkout", "."])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !checkout_output.status.success() {
+        let stderr = String::from_utf8_lossy(&checkout_output.stderr);
+        return Err(format!("Failed to discard changes: {}", stderr));
+    }
+
+    // Remove untracked files
+    let clean_output = Command::new("git")
+        .args(["clean", "-fd"])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !clean_output.status.success() {
+        let stderr = String::from_utf8_lossy(&clean_output.stderr);
+        return Err(format!("Failed to clean untracked files: {}", stderr));
+    }
+
+    Ok(())
+}
+
+/// Create a new branch from a base branch
+#[tauri::command]
+pub async fn create_branch(project_path: String, branch_name: String, from_branch: String) -> Result<(), String> {
+    let validated_path = validate_project_path(&project_path)?;
+
+    // Validate branch name
+    if branch_name.contains(' ') || branch_name.contains("..") || branch_name.starts_with('-') {
+        return Err("Invalid branch name".to_string());
+    }
+
+    // Get the current branch name
+    let current_branch_output = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let current_branch = String::from_utf8_lossy(&current_branch_output.stdout)
+        .trim()
+        .to_string();
+
+    let is_from_current = from_branch == current_branch ||
+        from_branch == format!("origin/{}", current_branch);
+
+    if is_from_current {
+        // Create branch from current HEAD (preserves local changes)
+        let output = Command::new("git")
+            .args(["checkout", "-b", &branch_name])
+            .current_dir(&validated_path)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(stderr.to_string());
+        }
+    } else {
+        // Creating from a different branch - fetch and use origin
+        let _ = Command::new("git")
+            .args(["fetch", "origin"])
+            .current_dir(&validated_path)
+            .output();
+
+        let base_ref = if from_branch.starts_with("origin/") {
+            from_branch
+        } else {
+            format!("origin/{}", from_branch)
+        };
+
+        let output = Command::new("git")
+            .args(["checkout", "-b", &branch_name, &base_ref])
+            .current_dir(&validated_path)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(stderr.to_string());
+        }
+    }
+
+    Ok(())
+}
+
+/// Fetch all branches from remotes
+#[tauri::command]
+pub async fn fetch_all_branches(project_path: String) -> Result<(), String> {
+    let validated_path = validate_project_path(&project_path)?;
+
+    let output = Command::new("git")
+        .args(["fetch", "--all", "--prune"])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Failed to fetch: {}", stderr));
+    }
+
+    Ok(())
+}
+
+/// Pull latest changes from remote for current branch
+#[tauri::command]
+pub async fn git_pull(project_path: String) -> Result<(), String> {
+    let validated_path = validate_project_path(&project_path)?;
+
+    let output = Command::new("git")
+        .args(["pull", "--ff-only"])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Failed to pull: {}", stderr));
+    }
+
+    Ok(())
+}
+
+/// Pull remote changes and merge (may result in conflicts)
+#[tauri::command]
+pub async fn pull_and_merge(project_path: String, merge_branch: Option<String>) -> Result<(), String> {
+    let validated_path = validate_project_path(&project_path)?;
+
+    // First fetch to ensure we have latest refs
+    let _ = Command::new("git")
+        .args(["fetch", "origin"])
+        .current_dir(&validated_path)
+        .output();
+
+    let output = if let Some(branch) = merge_branch {
+        Command::new("git")
+            .args(["merge", &format!("origin/{}", branch)])
+            .current_dir(&validated_path)
+            .output()
+            .map_err(|e| e.to_string())?
+    } else {
+        Command::new("git")
+            .args(["pull", "--no-rebase"])
+            .current_dir(&validated_path)
+            .output()
+            .map_err(|e| e.to_string())?
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{}{}", stdout, stderr);
+
+    // Check for merge conflicts
+    if combined.contains("CONFLICT") || combined.contains("Automatic merge failed") {
+        return Err(format!("MERGE_CONFLICT:{}", combined));
+    }
+
+    if !output.status.success() {
+        return Err(format!("Failed to merge: {}", stderr));
+    }
+
+    Ok(())
+}
+
+/// Delete a branch (local and optionally remote)
+#[tauri::command]
+pub async fn delete_branch(project_path: String, branch_name: String, delete_remote: bool) -> Result<(), String> {
+    let validated_path = validate_project_path(&project_path)?;
+
+    // Don't allow deleting main/master
+    if branch_name == "main" || branch_name == "master" {
+        return Err("Cannot delete the main branch".to_string());
+    }
+
+    // Get current branch to make sure we're not on it
+    let current = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let current_branch = String::from_utf8_lossy(&current.stdout).trim().to_string();
+    if current_branch == branch_name {
+        return Err("Cannot delete the current branch. Switch to another branch first.".to_string());
+    }
+
+    // Delete local branch
+    let local_output = Command::new("git")
+        .args(["branch", "-D", &branch_name])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !local_output.status.success() {
+        let stderr = String::from_utf8_lossy(&local_output.stderr);
+        if !stderr.contains("not found") {
+            return Err(stderr.to_string());
+        }
+    }
+
+    // Delete remote branch if requested
+    if delete_remote {
+        let remote_output = Command::new("git")
+            .args(["push", "origin", "--delete", &branch_name])
+            .current_dir(&validated_path)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !remote_output.status.success() {
+            let stderr = String::from_utf8_lossy(&remote_output.stderr);
+            if !stderr.contains("remote ref does not exist") {
+                return Err(format!("Failed to delete remote branch: {}", stderr));
+            }
+        }
+    }
+
+    Ok(())
+}

@@ -1,0 +1,352 @@
+//! # Shared Types
+//!
+//! This module contains all shared structs and types used across the Marketingstack backend.
+
+use serde::{Deserialize, Serialize};
+
+// ============ Prerequisites ============
+
+/// Result of checking if a prerequisite tool is installed
+#[derive(Serialize)]
+pub struct PrerequisiteCheck {
+    pub name: String,
+    pub available: bool,
+    pub path: Option<String>,
+}
+
+// ============ Project Management ============
+
+/// Project metadata returned by list_projects
+#[derive(Serialize)]
+pub struct ProjectInfo {
+    pub name: String,
+    pub path: String,
+    /// Asset protocol URL to thumbnail image, if it exists
+    pub thumbnail: Option<String>,
+    /// Unix timestamp (ms) when project was last opened
+    pub last_opened: Option<u64>,
+}
+
+/// Enhanced project info for dashboard display
+#[derive(Serialize)]
+pub struct DashboardProject {
+    pub name: String,
+    pub path: String,
+    pub thumbnail: Option<String>,
+    pub last_opened: Option<u64>,
+    /// Current git branch name
+    pub git_branch: Option<String>,
+    /// Number of uncommitted changes (staged + unstaged)
+    pub uncommitted_count: Option<u32>,
+    /// Production URL from Vercel
+    pub production_url: Option<String>,
+    /// Relative time string for last deployment (e.g., "2h ago")
+    pub last_deployed: Option<String>,
+    /// Deployment state: READY, BUILDING, ERROR, QUEUED, CANCELED
+    pub deployment_state: Option<String>,
+}
+
+/// Next.js page route information
+#[derive(Serialize)]
+pub struct PageInfo {
+    /// URL route (e.g., "/about", "/blog/[slug]")
+    pub route: String,
+    /// Path to the page file
+    pub file_path: String,
+}
+
+// ============ Project Metadata (Publish State Persistence) ============
+
+/// Record of a single publish event (staging or production)
+#[derive(Serialize, Deserialize, Clone)]
+pub struct PublishRecord {
+    pub url: String,
+    pub state: String,
+    #[serde(rename = "publishedAt")]
+    pub published_at: u64,
+}
+
+/// Publish metadata for staging and production
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct PublishMetadata {
+    pub staging: Option<PublishRecord>,
+    pub production: Option<PublishRecord>,
+}
+
+/// Project metadata stored in .marketingstack/project.json
+#[derive(Serialize, Deserialize)]
+pub struct ProjectMetadata {
+    #[serde(rename = "_description")]
+    pub description: String,
+    pub publish: PublishMetadata,
+    /// Unix timestamp (ms) when project was last opened
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_opened: Option<u64>,
+    /// Whether to prefix branch names with username (default true)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch_prefix_username: Option<bool>,
+}
+
+impl Default for ProjectMetadata {
+    fn default() -> Self {
+        ProjectMetadata {
+            description: "Marketingstack project metadata. Auto-generated - safe to delete if needed, will be recreated.".to_string(),
+            publish: PublishMetadata::default(),
+            last_opened: None,
+            branch_prefix_username: None,
+        }
+    }
+}
+
+// ============ Environment Variables ============
+
+#[derive(Serialize)]
+pub struct EnvFile {
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct EnvVar {
+    pub key: String,
+    pub value: String,
+}
+
+// ============ IDE ============
+
+#[derive(Serialize)]
+pub struct IdeAvailability {
+    pub vscode: bool,
+    pub cursor: bool,
+}
+
+// ============ Claude Integration ============
+
+#[derive(Serialize)]
+pub struct ClaudeCliStatus {
+    pub installed: bool,
+    pub version: Option<String>,
+}
+
+// ============ Vercel Integration ============
+
+#[derive(Serialize)]
+pub struct VercelCliStatus {
+    pub installed: bool,
+    pub authenticated: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeployToVercelOptions {
+    pub project_path: String,
+    pub project_name: String,
+    pub github_repo: Option<String>,
+}
+
+/// Vercel connection status - verified against Vercel API
+#[derive(Serialize)]
+pub struct ProjectVercelStatus {
+    /// "not-linked" | "not-git-connected" | "connected"
+    pub status: String,
+    /// Vercel project name
+    pub project_name: Option<String>,
+    /// Vercel org/team slug for dashboard URLs
+    pub vercel_org: Option<String>,
+    /// Production URL (shortest alias, could be custom domain)
+    pub production_url: Option<String>,
+    /// Staging URL (contains -git-staging-)
+    pub staging_url: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkToVercelOptions {
+    pub project_path: String,
+    pub github_repo: String, // e.g., "username/repo-name"
+}
+
+#[derive(Serialize)]
+pub struct VercelDeployment {
+    pub uid: String,
+    pub url: String,
+    pub state: String, // "READY", "BUILDING", "ERROR", "QUEUED", "CANCELED"
+    pub target: Option<String>, // "production" or null for preview
+    pub created_at: u64, // Unix timestamp in ms
+}
+
+#[derive(Serialize)]
+pub struct VercelDeploymentStatus {
+    pub staging: Option<VercelDeployment>,
+    pub production: Option<VercelDeployment>,
+    pub preview_url: Option<String>,
+    pub production_url: Option<String>,
+}
+
+/// Deployment status from Vercel
+#[derive(Serialize)]
+pub struct DeploymentStatus {
+    /// Current state: BUILDING, QUEUED, READY, ERROR, CANCELED
+    pub state: String,
+    /// Deployment URL (e.g., https://project-xxx.vercel.app)
+    pub url: Option<String>,
+    /// Unix timestamp (ms) when deployment was created
+    #[serde(rename = "createdAt")]
+    pub created_at: Option<u64>,
+    /// Unix timestamp (ms) when deployment became ready
+    #[serde(rename = "readyAt")]
+    pub ready_at: Option<u64>,
+}
+
+// ============ GitHub Integration ============
+
+#[derive(Serialize)]
+pub struct GitHubCliStatus {
+    pub installed: bool,
+    pub authenticated: bool,
+}
+
+/// GitHub connection status - verified against GitHub API
+#[derive(Serialize)]
+pub struct ProjectGitHubStatus {
+    /// "not-a-repo" | "no-remote" | "connected"
+    pub status: String,
+    /// e.g., "username/repo-name" - only set if connected
+    pub github_repo: Option<String>,
+    /// e.g., "https://github.com/username/repo-name" - only set if connected
+    pub github_url: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PushToGitHubOptions {
+    pub project_path: String,
+    pub repo_name: String,
+    pub is_private: bool,
+}
+
+// ============ Publishing ============
+
+#[derive(Serialize)]
+pub struct PublishResult {
+    pub url: String,
+    pub state: String,
+}
+
+// ============ Branch Management ============
+
+#[derive(Serialize)]
+pub struct BranchStatus {
+    pub local_changes: bool,
+    pub staging_ahead: i32,   // Commits local is ahead of staging
+    pub staging_behind: i32,  // Commits local is behind staging
+    pub main_ahead: i32,      // Commits local is ahead of main
+    pub main_behind: i32,     // Commits local is behind main
+    pub staging_exists: bool,
+}
+
+/// Information about a git branch
+#[derive(Serialize)]
+pub struct BranchInfo {
+    pub name: String,
+    pub is_current: bool,
+    pub is_remote: bool,
+    pub is_default: bool,
+    pub last_commit_date: u64,
+    pub last_commit_author: String,
+    pub ahead_of_main: i32,
+    pub behind_main: i32,
+}
+
+/// Result of switching branches
+#[derive(Serialize)]
+pub struct SwitchResult {
+    pub success: bool,
+    pub stashed_changes: bool,
+    pub error: Option<String>,
+}
+
+// ============ Pull Requests ============
+
+/// Information about a pull request
+#[derive(Serialize)]
+pub struct PullRequestInfo {
+    pub number: i32,
+    pub title: String,
+    pub head_ref: String,
+    pub base_ref: String,
+    pub author: String,
+    pub state: String,
+    pub mergeable: Option<bool>,
+    pub url: String,
+    pub created_at: String,
+}
+
+// ============ Merge Conflict Resolution ============
+
+/// A single conflict block within a file
+#[derive(Serialize)]
+pub struct ConflictBlock {
+    pub line_start: u32,
+    pub line_end: u32,
+    pub current_content: String,    // Between <<<<<<< and =======
+    pub incoming_content: String,   // Between ======= and >>>>>>>
+    pub context_before: String,     // 3 lines before conflict
+    pub context_after: String,      // 3 lines after conflict
+}
+
+/// Information about a file with conflicts
+#[derive(Serialize)]
+pub struct ConflictedFile {
+    pub file_path: String,
+    pub is_binary: bool,
+    pub conflicts: Vec<ConflictBlock>,
+    pub ours_branch: String,
+    pub theirs_branch: String,
+}
+
+// ============ PTY ============
+
+#[derive(Deserialize)]
+pub struct SpawnPtyOptions {
+    pub cwd: String,
+    pub command: String,
+    pub args: Vec<String>,
+    #[allow(dead_code)]
+    pub rows: u32,
+    #[allow(dead_code)]
+    pub cols: u32,
+}
+
+// ============ Setup/Onboarding ============
+
+/// Individual setup item status
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
+#[allow(dead_code)] // Error variant reserved for future use
+pub enum SetupItemStatus {
+    Ready,
+    NotInstalled,
+    NotAuthenticated,
+    Error,
+}
+
+/// Individual setup item
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SetupItemInfo {
+    pub id: String,
+    pub friendly_name: String,
+    pub status: SetupItemStatus,
+    pub version: Option<String>,
+    pub username: Option<String>,
+    pub error_message: Option<String>,
+}
+
+/// Full setup status response
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FullSetupStatus {
+    pub all_ready: bool,
+    pub items: Vec<SetupItemInfo>,
+}

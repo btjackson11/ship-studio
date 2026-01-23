@@ -1,0 +1,106 @@
+//! # Claude CLI Integration Commands
+//!
+//! Commands for checking Claude CLI status and installation.
+
+use std::process::Command;
+use crate::types::ClaudeCliStatus;
+use crate::utils::get_extended_path;
+use crate::commands::setup::is_mock_mode;
+
+/// Finds the Claude CLI binary by checking common installation paths.
+pub fn find_claude_binary() -> Option<std::path::PathBuf> {
+    // First try which
+    if let Ok(path) = which::which("claude") {
+        return Some(path);
+    }
+
+    // Check common npm global bin locations
+    if let Some(home) = dirs::home_dir() {
+        let common_paths = vec![
+            home.join(".npm-global/bin/claude"),
+            home.join(".nvm/versions/node").join("*").join("bin/claude"), // NVM
+            home.join("n/bin/claude"), // n version manager
+            std::path::PathBuf::from("/usr/local/bin/claude"),
+            std::path::PathBuf::from("/opt/homebrew/bin/claude"),
+        ];
+
+        for path in common_paths {
+            if path.exists() {
+                return Some(path);
+            }
+        }
+
+        // Check npm prefix
+        if let Ok(output) = Command::new("npm")
+            .args(["prefix", "-g"])
+            .env("PATH", get_extended_path())
+            .output()
+        {
+            if output.status.success() {
+                let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let claude_path = std::path::PathBuf::from(&prefix).join("bin/claude");
+                if claude_path.exists() {
+                    return Some(claude_path);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[tauri::command]
+pub async fn check_claude_cli_status() -> ClaudeCliStatus {
+    // Check if claude CLI is installed
+    let claude_path = find_claude_binary();
+
+    if claude_path.is_none() {
+        return ClaudeCliStatus {
+            installed: false,
+            version: None,
+        };
+    }
+
+    let claude_path = claude_path.unwrap();
+
+    // Get version
+    let version = Command::new(&claude_path)
+        .args(["--version"])
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+            } else {
+                None
+            }
+        });
+
+    ClaudeCliStatus {
+        installed: true,
+        version,
+    }
+}
+
+#[tauri::command]
+pub async fn install_claude_cli() -> Result<(), String> {
+    if is_mock_mode() {
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        crate::commands::setup::mock_install("claude");
+        return Ok(());
+    }
+
+    // Install Claude Code via official installer script
+    let output = Command::new("bash")
+        .args(["-c", "curl -fsSL https://claude.ai/install.sh | bash"])
+        .env("PATH", get_extended_path())
+        .output()
+        .map_err(|e| format!("Failed to run installer: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Failed to install Claude Code: {}", stderr));
+    }
+
+    Ok(())
+}
