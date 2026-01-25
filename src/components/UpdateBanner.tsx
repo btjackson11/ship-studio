@@ -1,11 +1,14 @@
 /**
  * UpdateBanner component that shows when an app update is available.
  *
- * Displays a banner at the top of the screen with:
+ * Displays an inline banner with:
  * - New version information
- * - Update/restart button
+ * - Release notes
+ * - Update Now / Later buttons
  * - Download progress during update
- * - Dismiss option
+ *
+ * "Later" persists the dismissal for the session. The banner will
+ * reappear on the next app launch.
  *
  * @module components/UpdateBanner
  */
@@ -18,9 +21,13 @@ import {
   restartApp,
   UpdateInfo,
 } from "../lib/updater";
+import "../styles/update-banner.css";
 
 /** How often to check for updates (1 hour) */
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+
+/** Session storage key for deferred updates */
+const DEFERRED_UPDATE_KEY = "shipstudio_deferred_update";
 
 export function UpdateBanner() {
   const [updateAvailable, setUpdateAvailable] = useState<{
@@ -31,7 +38,7 @@ export function UpdateBanner() {
     "idle" | "downloading" | "ready" | "error"
   >("idle");
   const [progress, setProgress] = useState(0);
-  const [dismissed, setDismissed] = useState(false);
+  const [deferred, setDeferred] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Check for updates on mount and periodically
@@ -40,8 +47,14 @@ export function UpdateBanner() {
       try {
         const result = await checkForUpdate();
         if (result) {
+          // Check if this version was deferred this session
+          const deferredVersion = sessionStorage.getItem(DEFERRED_UPDATE_KEY);
+          if (deferredVersion === result.info.version) {
+            setDeferred(true);
+          } else {
+            setDeferred(false);
+          }
           setUpdateAvailable(result);
-          setDismissed(false); // Show banner again if new update
         }
       } catch (err) {
         console.error("[UpdateBanner] Check failed:", err);
@@ -87,64 +100,84 @@ export function UpdateBanner() {
     }
   }, []);
 
-  const handleDismiss = useCallback(() => {
-    setDismissed(true);
-  }, []);
+  const handleLater = useCallback(() => {
+    if (updateAvailable) {
+      // Store in sessionStorage so it shows again on next app launch
+      sessionStorage.setItem(DEFERRED_UPDATE_KEY, updateAvailable.info.version);
+      setDeferred(true);
+    }
+  }, [updateAvailable]);
 
-  // Don't render if no update or dismissed
-  if (!updateAvailable || dismissed) {
+  // Don't render if no update or deferred
+  if (!updateAvailable || deferred) {
     return null;
   }
 
+  // Parse release notes - extract bullet points for the current version only
+  const parseReleaseNotes = (body: string | undefined): string[] => {
+    if (!body) return [];
+    // Split by bullet points and filter out empty lines and old version notes
+    const lines = body.split(/•/).map(s => s.trim()).filter(Boolean);
+    // Only take notes before the next version header
+    const currentVersionNotes: string[] = [];
+    for (const line of lines) {
+      if (line.startsWith("##") || line.includes("What's New in v")) break;
+      if (line) currentVersionNotes.push(line);
+    }
+    return currentVersionNotes;
+  };
+
+  const releaseNotes = parseReleaseNotes(updateAvailable.info.body);
+
   return (
     <div className="update-banner">
-      <div className="update-banner-content">
-        <div className="update-banner-info">
-          <span className="update-banner-icon">✨</span>
-          <span className="update-banner-text">
-            {status === "ready" ? (
-              <>Update ready! Restart to apply v{updateAvailable.info.version}</>
-            ) : status === "downloading" ? (
-              <>Downloading update... {progress}%</>
-            ) : status === "error" ? (
-              <>{error || "Update failed"}</>
-            ) : (
-              <>New version available: v{updateAvailable.info.version}</>
-            )}
-          </span>
+      <div className="update-banner-header">
+        <div className="update-banner-title">
+          <span className="update-banner-badge">Update Available</span>
+          <span className="update-banner-version">v{updateAvailable.info.version}</span>
         </div>
-        <div className="update-banner-actions">
-          {status === "ready" ? (
-            <button className="update-banner-btn primary" onClick={handleRestart}>
-              Restart Now
+        {status === "idle" && (
+          <div className="update-banner-actions">
+            <button className="update-banner-btn secondary" onClick={handleLater}>
+              Later
             </button>
-          ) : status === "downloading" ? (
+            <button className="update-banner-btn primary" onClick={handleUpdate}>
+              Update Now
+            </button>
+          </div>
+        )}
+        {status === "downloading" && (
+          <div className="update-banner-progress-container">
             <div className="update-banner-progress">
               <div
                 className="update-banner-progress-bar"
                 style={{ width: `${progress}%` }}
               />
             </div>
-          ) : status === "error" ? (
-            <button className="update-banner-btn" onClick={handleUpdate}>
+            <span className="update-banner-progress-text">{progress}%</span>
+          </div>
+        )}
+        {status === "ready" && (
+          <button className="update-banner-btn primary" onClick={handleRestart}>
+            Restart to Apply
+          </button>
+        )}
+        {status === "error" && (
+          <div className="update-banner-actions">
+            <span className="update-banner-error">{error}</span>
+            <button className="update-banner-btn secondary" onClick={handleUpdate}>
               Retry
             </button>
-          ) : (
-            <button className="update-banner-btn primary" onClick={handleUpdate}>
-              Update
-            </button>
-          )}
-          {status !== "downloading" && (
-            <button
-              className="update-banner-dismiss"
-              onClick={handleDismiss}
-              title="Dismiss"
-            >
-              ×
-            </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
+      {releaseNotes.length > 0 && status === "idle" && (
+        <ul className="update-banner-notes">
+          {releaseNotes.map((note, i) => (
+            <li key={i}>{note}</li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

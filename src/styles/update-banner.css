@@ -1,49 +1,37 @@
-/* Update Banner Styles */
+/* Update Banner Styles - matches app dark theme */
 
 .update-banner {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 9999;
-  background: linear-gradient(135deg, #2d5a27 0%, #1a3d15 100%);
-  border-bottom: 1px solid #3d7a35;
-  padding: 10px 16px;
-  animation: slideDown 0.3s ease-out;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
 }
 
-@keyframes slideDown {
-  from {
-    transform: translateY(-100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.update-banner-content {
-  max-width: 1200px;
-  margin: 0 auto;
+.update-banner-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
 }
 
-.update-banner-info {
+.update-banner-title {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.update-banner-icon {
-  font-size: 16px;
+.update-banner-badge {
+  background: var(--action);
+  color: var(--action-text);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
-.update-banner-text {
-  color: #e8f5e6;
+.update-banner-version {
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 500;
 }
@@ -51,62 +39,84 @@
 .update-banner-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .update-banner-btn {
-  padding: 6px 14px;
+  padding: 6px 12px;
   border-radius: 6px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   border: none;
   transition: all 0.15s ease;
-  background: rgba(255, 255, 255, 0.15);
-  color: #e8f5e6;
 }
 
-.update-banner-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
+.update-banner-btn.secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.update-banner-btn.secondary:hover {
+  background: var(--border);
+  color: var(--text-primary);
 }
 
 .update-banner-btn.primary {
-  background: #ffffff;
-  color: #1a3d15;
+  background: var(--action);
+  color: var(--action-text);
 }
 
 .update-banner-btn.primary:hover {
-  background: #f0f0f0;
+  background: var(--action-hover);
 }
 
-.update-banner-dismiss {
-  background: none;
-  border: none;
-  color: #a8d4a2;
-  font-size: 20px;
-  cursor: pointer;
-  padding: 4px 8px;
-  line-height: 1;
-  border-radius: 4px;
-  transition: all 0.15s ease;
-}
-
-.update-banner-dismiss:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
+.update-banner-progress-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .update-banner-progress {
-  width: 120px;
+  width: 140px;
   height: 6px;
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--bg-tertiary);
   border-radius: 3px;
   overflow: hidden;
 }
 
 .update-banner-progress-bar {
   height: 100%;
-  background: #ffffff;
+  background: var(--action);
   border-radius: 3px;
   transition: width 0.3s ease;
+}
+
+.update-banner-progress-text {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 36px;
+}
+
+.update-banner-error {
+  color: var(--error);
+  font-size: 13px;
+}
+
+.update-banner-notes {
+  margin-top: 10px;
+  padding-left: 20px;
+  list-style: disc;
+}
+
+.update-banner-notes li {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 2px;
+}
+
+.update-banner-notes li:last-child {
+  margin-bottom: 0;
 }
