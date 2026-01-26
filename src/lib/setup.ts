@@ -239,7 +239,7 @@ export const TERMINAL_COMMANDS: Record<string, TerminalCommand> = {
   },
   claude: {
     command: "bash",
-    args: ["-c", "curl -fsSL https://claude.ai/install.sh | bash"],
+    args: ["-ic", "curl -fsSL https://claude.ai/install.sh | bash"],
   },
   claude_auth: {
     command: "claude",

@@ -14,9 +14,10 @@ pub fn find_claude_binary() -> Option<std::path::PathBuf> {
         return Some(path);
     }
 
-    // Check common npm global bin locations
+    // Check common installation locations
     if let Some(home) = dirs::home_dir() {
         let common_paths = vec![
+            home.join(".local/bin/claude"), // New official installer location
             home.join(".npm-global/bin/claude"),
             home.join(".nvm/versions/node").join("*").join("bin/claude"), // NVM
             home.join("n/bin/claude"), // n version manager
