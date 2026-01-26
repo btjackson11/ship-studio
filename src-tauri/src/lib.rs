@@ -14,8 +14,11 @@
 pub mod types;
 pub mod utils;
 pub mod commands;
+pub mod logging;
+pub mod cache;
 
 use std::process::Command;
+use tracing;
 
 // Kill orphaned Claude processes spawned by this app
 fn cleanup_claude_processes() {
@@ -55,8 +58,16 @@ fn cleanup_claude_processes() {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize logging first
+    if let Err(e) = logging::init_logging() {
+        eprintln!("Failed to initialize logging: {}", e);
+    }
+
+    tracing::info!("Ship Studio starting up");
+
     // Clean up any orphaned Claude processes from previous crashed sessions
     cleanup_claude_processes();
+    tracing::debug!("Orphaned Claude processes cleaned up");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -186,6 +197,9 @@ pub fn run() {
             commands::assets::delete_asset,
             commands::assets::rename_asset,
             commands::assets::create_asset_folder,
+            // Logging
+            logging::get_log_path,
+            logging::log_frontend_event,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
