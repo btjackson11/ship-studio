@@ -21,6 +21,18 @@
       "allow": [
         { "path": "$RESOURCE/**" }
       ]
+    },
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [
+        { "path": "$HOME/.nvm/versions/node" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [
+        { "path": "$HOME/.nvm/**" }
+      ]
     }
   ]
 }

@@ -12,6 +12,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { spawn, IPty } from "tauri-pty";
 import { homeDir } from "@tauri-apps/api/path";
+import { readDir, exists } from "@tauri-apps/plugin-fs";
 import { loadNerdFonts } from "../../lib/fonts";
 import "@xterm/xterm/css/xterm.css";
 
@@ -158,9 +159,28 @@ export function OnboardingTerminal({
           `${homeNormalized}.npm-global/bin`,
           `${homeNormalized}.local/bin`,
           `${homeNormalized}.cargo/bin`,
-        ].join(":");
+          `${homeNormalized}n/bin`, // n version manager
+        ];
+
+        // Try to find nvm node versions and add their bin directories
+        const nvmNodeDir = `${homeNormalized}.nvm/versions/node`;
+        try {
+          const entries = await readDir(nvmNodeDir);
+          for (const entry of entries) {
+            const name = entry.name;
+            if (name && name.startsWith("v")) {
+              const binPath = `${nvmNodeDir}/${name}/bin`;
+              if (await exists(binPath)) {
+                userPaths.push(binPath);
+              }
+            }
+          }
+        } catch {
+          // nvm not installed or no versions - ignore
+        }
+
         const systemPaths = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
-        const fullPath = `${userPaths}:${systemPaths}`;
+        const fullPath = `${userPaths.join(":")}:${systemPaths}`;
 
         // Spawn PTY using tauri-pty
         // Must pass all essential env vars since env replaces (not merges with) parent environment
