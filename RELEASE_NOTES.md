@@ -6,6 +6,10 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.3.7
+
+- **Test release** - Verifying CI caching improvements
+
 ## What's New in v0.3.6
 
 - **Faster CI releases** - Added pnpm and Rust dependency caching to reduce build times
