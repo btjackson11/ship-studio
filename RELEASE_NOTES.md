@@ -6,6 +6,10 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.3.10
+
+- **Cache verification** - Testing CI cache restoration
+
 ## What's New in v0.3.9
 
 - **Simplified CI caching** - Use setup-node built-in pnpm cache
