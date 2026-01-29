@@ -209,6 +209,12 @@ pub fn run() {
             commands::assets::delete_asset,
             commands::assets::rename_asset,
             commands::assets::create_asset_folder,
+            // Code Health
+            commands::health::detect_health_scripts,
+            commands::health::run_health_script,
+            commands::health::get_health_status,
+            commands::health::clear_health_status,
+            commands::health::get_package_json,
             // Logging
             logging::get_log_path,
             logging::log_frontend_event,

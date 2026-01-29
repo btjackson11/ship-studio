@@ -104,6 +104,9 @@ pub struct ProjectMetadata {
     /// Information about auto-stashed changes from branch switching
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stash_info: Option<StashInfo>,
+    /// Code health check results (tests, lint, typecheck, format)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub health: Option<HealthCheckStatus>,
 }
 
 fn default_schema_version() -> u32 {
@@ -119,6 +122,7 @@ impl Default for ProjectMetadata {
             last_opened: None,
             branch_prefix_username: None,
             stash_info: None,
+            health: None,
         }
     }
 }
@@ -456,6 +460,88 @@ pub struct SpawnPtyOptions {
     pub rows: u32,
     #[allow(dead_code)]
     pub cols: u32,
+}
+
+// ============ Code Health ============
+
+/// Package manager detected from lockfiles
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum PackageManager {
+    Npm,
+    Pnpm,
+    Yarn,
+    Bun,
+}
+
+/// Script category for health checks
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum ScriptCategory {
+    Test,
+    Lint,
+    Typecheck,
+    Format,
+}
+
+/// A suggestion for adding a missing script
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ScriptSuggestion {
+    /// The category of the suggested script
+    pub category: ScriptCategory,
+    /// The suggested script name to add
+    pub script_name: String,
+    /// The suggested script command
+    pub script_command: String,
+    /// Why this is suggested (e.g., "typescript is installed")
+    pub reason: String,
+}
+
+/// Available scripts detected from package.json
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectedScripts {
+    pub package_manager: PackageManager,
+    pub test: Option<String>,
+    pub lint: Option<String>,
+    pub typecheck: Option<String>,
+    pub format: Option<String>,
+    pub has_package_json: bool,
+    /// Suggestions for scripts that could be added based on installed packages
+    pub suggestions: Vec<ScriptSuggestion>,
+}
+
+/// Result of running a health check script
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct HealthCheckResult {
+    /// "pass" or "fail"
+    pub status: String,
+    /// ISO timestamp of last run
+    pub last_run: String,
+    /// Duration in milliseconds
+    pub duration_ms: u64,
+    /// Full stdout output
+    pub stdout: String,
+    /// Full stderr output
+    pub stderr: String,
+    /// Exit code from the script
+    pub exit_code: i32,
+    /// The script name that was run
+    pub script_name: String,
+    /// The category of the check
+    pub category: ScriptCategory,
+}
+
+/// Stored health check status for all categories
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct HealthCheckStatus {
+    pub test: Option<HealthCheckResult>,
+    pub lint: Option<HealthCheckResult>,
+    pub typecheck: Option<HealthCheckResult>,
+    pub format: Option<HealthCheckResult>,
 }
 
 // ============ Setup/Onboarding ============

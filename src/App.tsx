@@ -38,6 +38,7 @@ import { ConflictResolutionModal } from './components/ConflictResolutionModal';
 import { BugReportButton } from './components/BugReportButton';
 import { MainBranchBanner } from './components/MainBranchBanner';
 import { BrowserDropdown } from './components/BrowserDropdown';
+import { CodeHealthPanel, CodeHealthPanelRef } from './components/CodeHealthPanel';
 import {
   BranchInfo,
   PullRequestInfo,
@@ -217,6 +218,12 @@ function App() {
   const [showDevServerLogs, setShowDevServerLogs] = useState(false);
   const devServerOutputRef = useRef<string>(''); // Buffer output for when logs tab opens
   const [devServerOutputVersion, setDevServerOutputVersion] = useState(0); // Triggers re-render when output changes
+
+  // Health check logs state
+  const [showHealthLogs, setShowHealthLogs] = useState(false);
+  const healthOutputRef = useRef<string>(''); // Buffer health check output
+  const [healthOutputVersion, setHealthOutputVersion] = useState(0); // Triggers re-render when output changes
+  const healthPanelRef = useRef<CodeHealthPanelRef>(null);
 
   // Integration states consolidated via reducer for atomic updates
   const [integrations, dispatch] = useReducer(integrationReducer, initialIntegrationState);
@@ -579,6 +586,11 @@ function App() {
         previewRef.current?.refresh();
         setIsBranchSwitching(false);
       }, 2500);
+      // Run health checks after branch switch (give files time to settle)
+      setTimeout(() => {
+        healthPanelRef.current?.refreshScripts();
+        healthPanelRef.current?.runAllChecks();
+      }, 1000);
     },
     [currentProject, fetchBranchInfo]
   );
@@ -663,6 +675,16 @@ function App() {
     },
     [activeTerminalTab]
   );
+
+  // Handle health check output
+  const handleHealthOutput = useCallback((output: string) => {
+    healthOutputRef.current += output;
+    // Limit buffer size to prevent memory issues
+    if (healthOutputRef.current.length > 100000) {
+      healthOutputRef.current = healthOutputRef.current.slice(-100000);
+    }
+    setHealthOutputVersion((v) => v + 1);
+  }, []);
 
   // Kill all terminal processes
   const killAllTerminals = useCallback(() => {
@@ -814,9 +836,11 @@ function App() {
 
     // Start dev server in background on the available port
     try {
-      // Clear previous output buffer
+      // Clear previous output buffers
       devServerOutputRef.current = '';
       setDevServerOutputVersion(0);
+      healthOutputRef.current = '';
+      setHealthOutputVersion(0);
       devServerRef.current = await startDevServer(project.path, port, (data) => {
         // Buffer output from the start so it's available when Logs tab opens
         devServerOutputRef.current += data;
@@ -919,9 +943,11 @@ function App() {
       await devServerRef.current.stop();
       devServerRef.current = null;
 
-      // Clear output buffer for fresh logs
+      // Clear output buffers for fresh logs
       devServerOutputRef.current = '';
       setDevServerOutputVersion(0);
+      healthOutputRef.current = '';
+      setHealthOutputVersion(0);
 
       // Kill any lingering process on the port
       try {
@@ -1217,7 +1243,9 @@ function App() {
                       )}
                     </button>
                   </div>
-                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div
+                    style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}
+                  >
                     {isPreviewHidden && (
                       <div className="preview-hidden-actions">
                         <BrowserDropdown
@@ -1249,6 +1277,13 @@ function App() {
                     </button>
                   </div>
                 </div>
+                <CodeHealthPanel
+                  ref={healthPanelRef}
+                  projectPath={currentProject?.path || ''}
+                  onToast={showToast}
+                  onAskClaude={sendToClaude}
+                  onHealthOutput={handleHealthOutput}
+                />
                 <div className="terminal-tabs-bar">
                   <div className="terminal-tabs">
                     {terminalTabs.map((tabId, index) => (
@@ -1282,12 +1317,35 @@ function App() {
                   </div>
                   <div className="terminal-tabs-divider" />
                   <button
-                    className={`terminal-tab logs-tab ${showDevServerLogs ? 'active' : ''}`}
-                    onClick={() => setShowDevServerLogs(true)}
+                    className={`terminal-tab logs-tab ${showDevServerLogs && !showHealthLogs ? 'active' : ''}`}
+                    onClick={() => {
+                      setShowDevServerLogs(true);
+                      setShowHealthLogs(false);
+                    }}
                     title="View dev server logs"
                   >
                     <TerminalIcon size={12} />
-                    <span>Logs</span>
+                    <span>Server</span>
+                  </button>
+                  <button
+                    className={`terminal-tab logs-tab ${showHealthLogs ? 'active' : ''}`}
+                    onClick={() => {
+                      setShowDevServerLogs(true);
+                      setShowHealthLogs(true);
+                    }}
+                    title="View health check logs"
+                  >
+                    <svg
+                      width={12}
+                      height={12}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                    </svg>
+                    <span>Health</span>
                   </button>
                 </div>
                 <div className="terminal-content">
@@ -1311,11 +1369,19 @@ function App() {
                       />
                     </div>
                   ))}
-                  {showDevServerLogs && (
+                  {showDevServerLogs && !showHealthLogs && (
                     <div className="terminal-tab-content" style={{ display: 'block' }}>
                       <DevServerLogs
                         output={devServerOutputRef.current}
                         outputVersion={devServerOutputVersion}
+                      />
+                    </div>
+                  )}
+                  {showHealthLogs && (
+                    <div className="terminal-tab-content" style={{ display: 'block' }}>
+                      <DevServerLogs
+                        output={healthOutputRef.current}
+                        outputVersion={healthOutputVersion}
                       />
                     </div>
                   )}
