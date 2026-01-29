@@ -109,6 +109,8 @@ interface PreviewProps {
   onCropCancel?: () => void;
   /** Whether a branch switch is in progress */
   isBranchSwitching?: boolean;
+  /** Whether the dev server is restarting */
+  isDevServerRestarting?: boolean;
 }
 
 /**
@@ -135,6 +137,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     onCropComplete,
     onCropCancel,
     isBranchSwitching = false,
+    isDevServerRestarting = false,
   },
   ref
 ) {
@@ -830,6 +833,13 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
             <div className="preview-branch-switching-overlay">
               <div className="preview-branch-switching-spinner" />
               <span>Switching branch...</span>
+            </div>
+          )}
+          {/* Dev server restarting overlay */}
+          {isDevServerRestarting && (
+            <div className="preview-branch-switching-overlay">
+              <div className="preview-branch-switching-spinner" />
+              <span>Restarting dev server...</span>
             </div>
           )}
           {/* Crop selection overlay */}

@@ -64,6 +64,7 @@ import {
   PlusIcon,
   ImageIcon,
   TerminalIcon,
+  ResetIcon,
 } from './components/icons';
 import { startDevServer, Project, DevServerHandle } from './lib/project';
 import {
@@ -227,6 +228,9 @@ function App() {
 
   // Dev server port (dynamically assigned to avoid conflicts)
   const [devServerPort, setDevServerPort] = useState(PREFERRED_DEV_SERVER_PORT);
+
+  // Dev server restart state
+  const [isRestartingDevServer, setIsRestartingDevServer] = useState(false);
 
   // Env editor modal
   const [showEnvEditor, setShowEnvEditor] = useState(false);
@@ -905,6 +909,42 @@ function App() {
     setView('projects');
   };
 
+  const handleRestartDevServer = async () => {
+    if (!currentProject || !devServerRef.current) return;
+
+    setIsRestartingDevServer(true);
+
+    try {
+      // Stop current dev server
+      await devServerRef.current.stop();
+      devServerRef.current = null;
+
+      // Clear output buffer for fresh logs
+      devServerOutputRef.current = '';
+      setDevServerOutputVersion(0);
+
+      // Kill any lingering process on the port
+      try {
+        await invoke('kill_port', { port: devServerPort });
+      } catch {
+        // Ignore if nothing to kill
+      }
+
+      // Start new dev server
+      devServerRef.current = await startDevServer(currentProject.path, devServerPort, (data) => {
+        devServerOutputRef.current += data;
+        if (devServerOutputRef.current.length > 100000) {
+          devServerOutputRef.current = devServerOutputRef.current.slice(-100000);
+        }
+        setDevServerOutputVersion((v) => v + 1);
+      });
+    } catch (error) {
+      logger.error('Failed to restart dev server', { error });
+    } finally {
+      setIsRestartingDevServer(false);
+    }
+  };
+
   const handleGitHubStatusChange = async (vercelDeployedUrl?: string) => {
     // Refresh project GitHub and Vercel status after push/publish
     if (currentProject) {
@@ -1170,22 +1210,37 @@ function App() {
                       )}
                     </button>
                   </div>
-                  {isPreviewHidden && (
-                    <div className="preview-hidden-actions">
-                      <BrowserDropdown
-                        url={`http://localhost:${devServerPort}`}
-                        buttonClassName="show-preview-btn"
-                      />
-                      <button
-                        className="show-preview-btn"
-                        onClick={() => setIsPreviewHidden(false)}
-                        title="Show Preview"
-                      >
-                        <PanelRightIcon size={14} />
-                        <span>Show Preview</span>
-                      </button>
-                    </div>
-                  )}
+                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {isPreviewHidden && (
+                      <div className="preview-hidden-actions">
+                        <BrowserDropdown
+                          url={`http://localhost:${devServerPort}`}
+                          buttonClassName="show-preview-btn"
+                        />
+                        <button
+                          className="show-preview-btn"
+                          onClick={() => setIsPreviewHidden(false)}
+                          title="Show Preview"
+                        >
+                          <PanelRightIcon size={14} />
+                          <span>Show Preview</span>
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      className="show-preview-btn"
+                      onClick={() => void handleRestartDevServer()}
+                      disabled={isRestartingDevServer || !devServerRef.current}
+                      title="Restart dev server"
+                    >
+                      {isRestartingDevServer ? (
+                        <div className="capture-spinner" />
+                      ) : (
+                        <ResetIcon size={14} />
+                      )}
+                      <span>Restart Server</span>
+                    </button>
+                  </div>
                 </div>
                 <div className="terminal-tabs-bar">
                   <div className="terminal-tabs">
@@ -1362,6 +1417,7 @@ function App() {
                     onCropComplete={handleCropComplete}
                     onCropCancel={handleCropCancel}
                     isBranchSwitching={isBranchSwitching}
+                    isDevServerRestarting={isRestartingDevServer}
                   />
                 )}
                 {workspaceTab === 'branches' && currentProject && (
