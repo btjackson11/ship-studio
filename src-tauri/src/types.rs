@@ -394,6 +394,25 @@ pub struct ChangedFile {
     pub status: String,
 }
 
+/// Diff content for a single uncommitted file
+#[derive(Serialize)]
+pub struct FileDiff {
+    /// Relative file path from project root
+    pub file_path: String,
+    /// True if this is a newly added/untracked file
+    pub is_new_file: bool,
+    /// True if the file was deleted
+    pub is_deleted: bool,
+    /// True if this is a binary file
+    pub is_binary: bool,
+    /// The raw diff content (or full file content for new files)
+    pub content: String,
+    /// Number of lines added
+    pub additions: u32,
+    /// Number of lines deleted
+    pub deletions: u32,
+}
+
 // ============ Pull Requests ============
 
 /// Information about a pull request

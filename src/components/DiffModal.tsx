@@ -1,0 +1,181 @@
+/**
+ * File diff modal for viewing uncommitted changes.
+ *
+ * Displays a git-style diff with:
+ * - Additions highlighted in green
+ * - Deletions highlighted in red
+ * - Context lines in default color
+ *
+ * @module components/DiffModal
+ */
+
+import { useState, useEffect, useCallback } from 'react';
+import { getFileDiff, FileDiff, ChangeStatus } from '../lib/git';
+import { CloseIcon, FileIcon } from './icons';
+
+interface DiffModalProps {
+  projectPath: string;
+  filePath: string;
+  fileStatus: ChangeStatus;
+  onClose: () => void;
+}
+
+export function DiffModal({ projectPath, filePath, fileStatus, onClose }: DiffModalProps) {
+  const [diff, setDiff] = useState<FileDiff | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadDiff = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await getFileDiff(projectPath, filePath);
+      setDiff(result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectPath, filePath]);
+
+  useEffect(() => {
+    void loadDiff();
+  }, [loadDiff]);
+
+  // Handle escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  // Get filename from path
+  const fileName = filePath.split('/').pop() || filePath;
+
+  // Get status label
+  const getStatusLabel = () => {
+    switch (fileStatus) {
+      case 'added':
+        return 'New File';
+      case 'deleted':
+        return 'Deleted';
+      case 'renamed':
+        return 'Renamed';
+      default:
+        return 'Modified';
+    }
+  };
+
+  // Render diff content with syntax highlighting
+  const renderDiffContent = () => {
+    if (!diff) return null;
+
+    if (diff.isBinary) {
+      return <div className="diff-binary">Binary file - cannot display diff</div>;
+    }
+
+    // For new files, show content as all additions
+    if (diff.isNewFile) {
+      const lines = diff.content.split('\n');
+      return (
+        <div className="diff-lines">
+          {lines.map((line, index) => (
+            <div key={index} className="diff-line diff-line-add">
+              <span className="diff-line-number">{index + 1}</span>
+              <span className="diff-line-prefix">+</span>
+              <span className="diff-line-content">{line || ' '}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // For regular diffs, parse and highlight
+    const lines = diff.content.split('\n');
+
+    return (
+      <div className="diff-lines">
+        {lines.map((line, index) => {
+          let lineClass = 'diff-line';
+          let prefix = ' ';
+
+          if (line.startsWith('+') && !line.startsWith('+++')) {
+            lineClass += ' diff-line-add';
+            prefix = '+';
+          } else if (line.startsWith('-') && !line.startsWith('---')) {
+            lineClass += ' diff-line-delete';
+            prefix = '-';
+          } else if (line.startsWith('@@')) {
+            lineClass += ' diff-line-hunk';
+            prefix = '';
+          } else if (line.startsWith('diff ') || line.startsWith('index ')) {
+            lineClass += ' diff-line-meta';
+            prefix = '';
+          } else if (line.startsWith('---') || line.startsWith('+++')) {
+            lineClass += ' diff-line-meta';
+            prefix = '';
+          }
+
+          return (
+            <div key={index} className={lineClass}>
+              {prefix && <span className="diff-line-prefix">{prefix}</span>}
+              <span className="diff-line-content">{line || ' '}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div className="diff-modal" onClick={onClose}>
+      <div className="diff-modal-content" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="diff-header">
+          <div className="diff-header-info">
+            <FileIcon size={16} />
+            <span className="diff-filename">{fileName}</span>
+            <span className={`diff-status diff-status-${fileStatus}`}>{getStatusLabel()}</span>
+          </div>
+          <button className="diff-close-btn" onClick={onClose}>
+            <CloseIcon size={16} />
+          </button>
+        </div>
+
+        {/* File path */}
+        <div className="diff-path">{filePath}</div>
+
+        {/* Stats bar */}
+        {diff && !diff.isBinary && (
+          <div className="diff-stats">
+            <span className="diff-stat-add">+{diff.additions}</span>
+            <span className="diff-stat-delete">-{diff.deletions}</span>
+          </div>
+        )}
+
+        {/* Content */}
+        <div className="diff-body">
+          {isLoading && (
+            <div className="diff-loading">
+              <div className="diff-spinner" />
+              <p>Loading diff...</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="diff-error">
+              <p>{error}</p>
+              <button onClick={loadDiff}>Retry</button>
+            </div>
+          )}
+
+          {!isLoading && !error && diff && <pre className="diff-pre">{renderDiffContent()}</pre>}
+        </div>
+      </div>
+    </div>
+  );
+}

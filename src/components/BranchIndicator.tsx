@@ -18,7 +18,8 @@
 import { useState, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { BranchIcon, ChevronIcon, FileIcon, TrashIcon } from './icons';
-import { ChangedFile } from '../lib/git';
+import { ChangedFile, ChangeStatus } from '../lib/git';
+import { DiffModal } from './DiffModal';
 
 interface BranchIndicatorProps {
   /** Current branch name */
@@ -55,6 +56,9 @@ export function BranchIndicator({
   const [showDropdown, setShowDropdown] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<{ path: string; status: ChangeStatus } | null>(
+    null
+  );
   const dropdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confirmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMainBranch = currentBranch === 'main' || currentBranch === 'master';
@@ -181,7 +185,14 @@ export function BranchIndicator({
           </div>
           <div className="branch-changes-list">
             {changedFiles.map((file, index) => (
-              <div key={index} className="branch-changes-item">
+              <div
+                key={index}
+                className="branch-changes-item branch-changes-item-clickable"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedFile({ path: file.path, status: file.status as ChangeStatus });
+                }}
+              >
                 {getStatusIndicator(file.status)}
                 <FileIcon size={12} />
                 <span className="branch-changes-path">
@@ -207,6 +218,15 @@ export function BranchIndicator({
             </button>
           </div>
         </div>
+      )}
+
+      {selectedFile && (
+        <DiffModal
+          projectPath={projectPath}
+          filePath={selectedFile.path}
+          fileStatus={selectedFile.status}
+          onClose={() => setSelectedFile(null)}
+        />
       )}
     </div>
   );

@@ -311,6 +311,82 @@ pub async fn get_changed_files(project_path: String) -> Result<Vec<ChangedFile>,
     Ok(files)
 }
 
+/// Get the diff for a single uncommitted file
+#[tauri::command]
+pub async fn get_file_diff(
+    project_path: String,
+    file_path: String,
+) -> Result<crate::types::FileDiff, String> {
+    let validated_path = validate_project_path(&project_path)?;
+
+    // Run git diff HEAD -- <filepath> to get all uncommitted changes
+    let output = Command::new("git")
+        .args(["diff", "HEAD", "--", &file_path])
+        .current_dir(&validated_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let diff_content = String::from_utf8_lossy(&output.stdout).to_string();
+
+    // If diff is empty, the file might be untracked (new file)
+    if diff_content.trim().is_empty() {
+        // Check if file is untracked
+        let status_output = Command::new("git")
+            .args(["status", "--porcelain", "--", &file_path])
+            .current_dir(&validated_path)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        let status = String::from_utf8_lossy(&status_output.stdout);
+
+        // If status starts with "??" or "A ", it's a new file
+        if status.starts_with("??") || status.starts_with("A ") {
+            // Read the file content and return as all additions
+            let full_path = validated_path.join(&file_path);
+            let content = std::fs::read_to_string(&full_path)
+                .map_err(|e| format!("Failed to read file: {}", e))?;
+
+            let line_count = content.lines().count() as u32;
+
+            return Ok(crate::types::FileDiff {
+                file_path,
+                is_new_file: true,
+                is_deleted: false,
+                is_binary: false,
+                content,
+                additions: line_count,
+                deletions: 0,
+            });
+        }
+    }
+
+    // Check if file was deleted
+    let is_deleted = diff_content.contains("deleted file mode");
+
+    // Check if binary file
+    let is_binary = diff_content.contains("Binary files");
+
+    // Count additions and deletions
+    let additions = diff_content
+        .lines()
+        .filter(|l| l.starts_with('+') && !l.starts_with("+++"))
+        .count() as u32;
+    let deletions = diff_content
+        .lines()
+        .filter(|l| l.starts_with('-') && !l.starts_with("---"))
+        .count() as u32;
+
+    Ok(crate::types::FileDiff {
+        file_path,
+        is_new_file: false,
+        is_deleted,
+        is_binary,
+        content: diff_content,
+        additions,
+        deletions,
+    })
+}
+
 #[tauri::command]
 pub async fn get_branch_status(project_path: String) -> Result<BranchStatus, String> {
     let validated_path = validate_project_path(&project_path)?;

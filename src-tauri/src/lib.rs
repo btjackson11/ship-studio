@@ -97,6 +97,7 @@ pub fn run() {
             commands::git::init_git_repo,
             commands::git::check_git_has_changes,
             commands::git::get_changed_files,
+            commands::git::get_file_diff,
             commands::git::get_branch_status,
             commands::git::reset_to_branch,
             commands::git::list_branches,
