@@ -1138,9 +1138,17 @@ function App() {
 
     setIsRestartingDevServer(true);
 
+    // Helper to add timeout to async operations to prevent infinite hangs
+    const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+      ]);
+    };
+
     try {
-      // Stop current dev server
-      await devServerRef.current.stop();
+      // Stop current dev server (5s timeout)
+      await withTimeout(devServerRef.current.stop(), 5000, undefined);
       devServerRef.current = null;
 
       // Clear output buffers for fresh logs
@@ -1149,28 +1157,40 @@ function App() {
       healthOutputRef.current = '';
       setHealthOutputVersion(0);
 
-      // Kill any lingering process on the port
+      // Kill any lingering process on the port (5s timeout)
       try {
-        await invoke('kill_port', { port: devServerPort });
+        await withTimeout(invoke('kill_port', { port: devServerPort }), 5000, undefined);
       } catch {
         // Ignore if nothing to kill
       }
 
-      // Clear project cache (.next, node_modules/.cache, etc.)
+      // Clear project cache - can be slow for large .next folders (10s timeout)
       try {
-        await invoke('clear_project_cache', { projectPath: currentProject.path });
+        await withTimeout(
+          invoke('clear_project_cache', { projectPath: currentProject.path }),
+          10000,
+          undefined
+        );
       } catch {
         // Non-critical - continue even if cache clear fails
       }
 
-      // Start new dev server
-      devServerRef.current = await startDevServer(currentProject.path, devServerPort, (data) => {
-        devServerOutputRef.current += data;
-        if (devServerOutputRef.current.length > 100000) {
-          devServerOutputRef.current = devServerOutputRef.current.slice(-100000);
-        }
-        setDevServerOutputVersion((v) => v + 1);
-      });
+      // Start new dev server (10s timeout for the spawn setup, not the server itself)
+      devServerRef.current = await withTimeout(
+        startDevServer(currentProject.path, devServerPort, (data) => {
+          devServerOutputRef.current += data;
+          if (devServerOutputRef.current.length > 100000) {
+            devServerOutputRef.current = devServerOutputRef.current.slice(-100000);
+          }
+          setDevServerOutputVersion((v) => v + 1);
+        }),
+        10000,
+        null as unknown as DevServerHandle
+      );
+
+      if (!devServerRef.current) {
+        logger.error('Failed to start dev server: spawn timed out');
+      }
     } catch (error) {
       logger.error('Failed to restart dev server', { error });
     } finally {
