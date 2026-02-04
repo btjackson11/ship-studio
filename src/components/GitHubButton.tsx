@@ -13,7 +13,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { GitHubState, VercelState } from '../App';
+import { GitHubState, VercelState } from '../hooks/useIntegrationStatus';
 import { ProjectGitHubStatus, pushToGitHub, getGitHubOrgs } from '../lib/github';
 import { linkToVercel } from '../lib/vercel';
 import { openUrl } from '@tauri-apps/plugin-opener';

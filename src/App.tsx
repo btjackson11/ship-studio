@@ -3,20 +3,39 @@
  *
  * This is the root component that orchestrates:
  * - Application views (loading, setup, projects, workspace)
- * - Integration state (GitHub, Vercel, Claude CLI status)
  * - Project management (opening, creating, dev server lifecycle)
  * - Terminal and preview panel coordination
  * - Periodic screenshot capture for thumbnails
- * - Toast notifications
+ * - Git branch management and status polling
  *
- * State is managed via React's useReducer for atomic integration updates
- * and useState for simpler local state.
+ * ## State Architecture
+ *
+ * Some state has been extracted into custom hooks for better organization:
+ * - `useToasts` - Toast notification state (self-contained, no dependencies)
+ * - `useTerminalManagement` - Terminal tabs and session state (self-contained)
+ * - `useIntegrationStatus` - GitHub/Vercel/Claude integration state (complex reducer)
+ *
+ * The following state intentionally remains in App.tsx:
+ * - **Git/Branch state** (currentBranch, branches, openPRs, etc.) - Tightly coupled
+ *   with project lifecycle, preview refresh, and health panel. Extracting would
+ *   require passing multiple refs and callbacks, adding complexity without benefit.
+ * - **Dev server state** (devServerRef, devServerPort, etc.) - Fundamentally tied
+ *   to project open/close lifecycle in handleSelectProject/handleBackToProjects.
+ * - **UI state** (modals, dropdowns, compact mode) - Simple boolean flags that
+ *   don't benefit from extraction.
  *
  * @module App
  */
 
-import { useState, useEffect, useRef, useCallback, useReducer } from 'react';
-import { Terminal, TerminalHandle, ClaudeStatus } from './components/Terminal';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useToasts } from './hooks/useToasts';
+import { useTerminalManagement } from './hooks/useTerminalManagement';
+import {
+  useIntegrationStatus,
+  GITHUB_STATUS_FALLBACK,
+  VERCEL_STATUS_FALLBACK,
+} from './hooks/useIntegrationStatus';
+import { Terminal, ClaudeStatus } from './components/Terminal';
 import { DevServerLogs } from './components/DevServerLogs';
 import { Preview, PreviewHandle } from './components/Preview';
 import { ProjectList } from './components/ProjectList';
@@ -91,22 +110,9 @@ import {
   ActivityIcon,
 } from './components/icons';
 import { startDevServer, Project, DevServerHandle, getAutoAcceptMode } from './lib/project';
-import {
-  checkGitHubCliStatus,
-  getGitHubUsername,
-  getProjectGitHubStatus,
-  GitHubCliStatus,
-  ProjectGitHubStatus,
-} from './lib/github';
+import { getProjectGitHubStatus } from './lib/github';
 import { getChangedFiles, ChangedFile } from './lib/git';
-import {
-  checkVercelCliStatus,
-  getVercelUsername,
-  getProjectVercelStatus,
-  VercelCliStatus,
-  ProjectVercelStatus,
-} from './lib/vercel';
-import { checkClaudeCliStatus, ClaudeCliStatus } from './lib/claude';
+import { getProjectVercelStatus } from './lib/vercel';
 import {
   enterCompactMode,
   exitCompactMode,
@@ -139,118 +145,8 @@ const SCREENSHOT_RETRY_DELAY_MS = 3000;
 /** Preferred port for Next.js dev server (will find available port if taken) */
 const PREFERRED_DEV_SERVER_PORT = 3000;
 
-/** Fallback GitHub status when the check fails or times out (shows "Create Repo" instead of stuck "Checking...") */
-const GITHUB_STATUS_FALLBACK: ProjectGitHubStatus = {
-  status: 'no-remote',
-  github_repo: null,
-  github_url: null,
-};
-/** Fallback Vercel status when the check fails or times out (shows "Connect" instead of stuck "Checking...") */
-const VERCEL_STATUS_FALLBACK: ProjectVercelStatus = {
-  status: 'not-linked',
-  project_name: null,
-  vercel_org: null,
-  production_url: null,
-  staging_url: null,
-};
-
 /** Current application view/screen */
 type AppView = 'loading' | 'onboarding' | 'projects' | 'project-loading' | 'workspace';
-
-/** Global GitHub CLI and authentication state */
-export interface GitHubState {
-  /** CLI installation and auth status */
-  cliStatus: GitHubCliStatus;
-  /** Authenticated username or null */
-  username: string | null;
-}
-
-/** Global Vercel CLI and authentication state */
-export interface VercelState {
-  /** CLI installation and auth status */
-  cliStatus: VercelCliStatus;
-  /** Authenticated username or null */
-  username: string | null;
-}
-
-/** Global Claude CLI state */
-export interface ClaudeState {
-  /** CLI installation status and version */
-  cliStatus: ClaudeCliStatus;
-}
-
-/**
- * Consolidated integration state for all external services.
- * Managed via useReducer for atomic updates to prevent race conditions.
- */
-interface IntegrationState {
-  /** GitHub CLI and auth state */
-  github: GitHubState;
-  /** Current project's GitHub repo status */
-  projectGithub: ProjectGitHubStatus | null;
-  /** Vercel CLI and auth state */
-  vercel: VercelState;
-  /** Current project's Vercel deployment status */
-  projectVercel: ProjectVercelStatus | null;
-  /** Claude CLI state */
-  claude: ClaudeState;
-}
-
-type IntegrationAction =
-  | { type: 'SET_GITHUB'; payload: GitHubState }
-  | { type: 'SET_PROJECT_GITHUB'; payload: ProjectGitHubStatus | null }
-  | { type: 'SET_VERCEL'; payload: VercelState }
-  | { type: 'SET_PROJECT_VERCEL'; payload: ProjectVercelStatus | null }
-  | { type: 'SET_CLAUDE'; payload: ClaudeState }
-  | { type: 'CLEAR_PROJECT_STATUSES' }
-  | {
-      type: 'SET_ALL_CLI';
-      payload: { github: GitHubState; vercel: VercelState; claude: ClaudeState };
-    }
-  | {
-      type: 'SET_PROJECT_STATUSES';
-      payload: { github: ProjectGitHubStatus | null; vercel: ProjectVercelStatus | null };
-    };
-
-const initialIntegrationState: IntegrationState = {
-  github: { cliStatus: { installed: false, authenticated: false }, username: null },
-  projectGithub: null,
-  vercel: { cliStatus: { installed: false, authenticated: false }, username: null },
-  projectVercel: null,
-  claude: { cliStatus: { installed: false, version: null } },
-};
-
-function integrationReducer(state: IntegrationState, action: IntegrationAction): IntegrationState {
-  switch (action.type) {
-    case 'SET_GITHUB':
-      return { ...state, github: action.payload };
-    case 'SET_PROJECT_GITHUB':
-      return { ...state, projectGithub: action.payload };
-    case 'SET_VERCEL':
-      return { ...state, vercel: action.payload };
-    case 'SET_PROJECT_VERCEL':
-      return { ...state, projectVercel: action.payload };
-    case 'SET_CLAUDE':
-      return { ...state, claude: action.payload };
-    case 'CLEAR_PROJECT_STATUSES':
-      return { ...state, projectGithub: null, projectVercel: null };
-    case 'SET_ALL_CLI':
-      return {
-        ...state,
-        github: action.payload.github,
-        vercel: action.payload.vercel,
-        claude: action.payload.claude,
-      };
-    case 'SET_PROJECT_STATUSES':
-      return {
-        ...state,
-        projectGithub: action.payload.github,
-        projectVercel: action.payload.vercel,
-      };
-    default:
-      return state;
-  }
-}
 
 /** Props for the App component */
 interface AppProps {
@@ -263,7 +159,6 @@ function App({ initialProjectPath }: AppProps) {
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [autoAcceptMode, setAutoAcceptMode] = useState(false);
   const devServerRef = useRef<DevServerHandle | null>(null);
-  const terminalRefsMap = useRef<Map<number, TerminalHandle | null>>(new Map());
   const previewRef = useRef<PreviewHandle | null>(null);
   const screenshotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const currentProjectPathRef = useRef<string | null>(null);
@@ -274,12 +169,20 @@ function App({ initialProjectPath }: AppProps) {
   // Track project path currently being opened to prevent concurrent opens (race condition guard)
   const openingProjectPathRef = useRef<string | null>(null);
 
-  // Terminal tabs state
-  const [terminalTabs, setTerminalTabs] = useState<number[]>([1]);
-  const [activeTerminalTab, setActiveTerminalTab] = useState(1);
-  const terminalTabCounterRef = useRef(1);
-  const [terminalSessionId, setTerminalSessionId] = useState(1); // Changes when project changes to force remount
-  const MAX_TERMINAL_TABS = 5;
+  // Terminal tabs management
+  const {
+    terminalTabs,
+    activeTerminalTab,
+    terminalSessionId,
+    terminalRefsMap,
+    maxTerminalTabs,
+    setActiveTerminalTab,
+    addTerminalTab,
+    closeTerminalTab,
+    resetTerminals,
+    focusActiveTerminal,
+    pasteToActiveTerminal,
+  } = useTerminalManagement();
 
   // Compact mode state - starts false, set to true when Compact button is clicked
   const [isPinned, setIsPinned] = useState(false);
@@ -336,7 +239,19 @@ function App({ initialProjectPath }: AppProps) {
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
 
   // Integration states consolidated via reducer for atomic updates
-  const [integrations, dispatch] = useReducer(integrationReducer, initialIntegrationState);
+  const {
+    integrations,
+    refreshVercelStatus,
+    refreshAllCliStatuses,
+    setProjectGitHubStatus,
+    setProjectVercelStatus,
+    clearProjectStatuses,
+    authTerminalConfig,
+    handleGitHubConnect: handleGitHubConnectFromOverlay,
+    handleVercelConnect: handleVercelConnectFromOverlay,
+    handleAuthTerminalExit,
+    closeAuthTerminal,
+  } = useIntegrationStatus();
 
   // Capture state for screenshot button
   const [isCapturing, setIsCapturing] = useState(false);
@@ -356,13 +271,6 @@ function App({ initialProjectPath }: AppProps) {
 
   // Env editor modal
   const [showEnvEditor, setShowEnvEditor] = useState(false);
-
-  // Auth terminal modal (for GitHub/Vercel connect from workspace)
-  const [authTerminalConfig, setAuthTerminalConfig] = useState<{
-    service: 'github' | 'vercel';
-    command: string;
-    args: string[];
-  } | null>(null);
 
   // Assets panel modal
   const [showAssetsPanel, setShowAssetsPanel] = useState(false);
@@ -388,10 +296,7 @@ function App({ initialProjectPath }: AppProps) {
   const [, setCurrentPreviewPage] = useState('/');
 
   // Toast notifications
-  const [toasts, setToasts] = useState<
-    Array<{ id: number; message: string; type: 'success' | 'error' }>
-  >([]);
-  const toastIdRef = useRef(0);
+  const { toasts, showToast, dismissToast } = useToasts();
 
   // Publishing state (lifted from PublishDropdown so button shows "Publishing..." even when dropdown closed)
   const [isPublishing, setIsPublishing] = useState(false);
@@ -446,23 +351,6 @@ function App({ initialProjectPath }: AppProps) {
       }
     }
   }, [integrations.projectGithub?.status, workspaceTab, compactView]);
-
-  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
-    const id = ++toastIdRef.current;
-    setToasts((prev) => {
-      // Keep max 5 toasts, remove oldest if needed
-      const updated = [...prev, { id, message, type }];
-      return updated.slice(-5);
-    });
-    // Auto-dismiss after 4 seconds
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
-  }, []);
-
-  const dismissToast = useCallback((id: number) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
 
   // Check IDE availability on mount
   useEffect(() => {
@@ -521,40 +409,8 @@ function App({ initialProjectPath }: AppProps) {
       // Slow path: full setup check (first launch or something missing)
       const setupStatus = await getFullSetupStatus();
 
-      // Check GitHub, Vercel, and Claude status in parallel
-      const [ghStatus, vcStatus, clStatus] = await Promise.all([
-        checkGitHubCliStatus(),
-        checkVercelCliStatus(),
-        checkClaudeCliStatus(),
-      ]);
-
-      let ghUsername: string | null = null;
-      if (ghStatus.authenticated) {
-        try {
-          ghUsername = await getGitHubUsername();
-        } catch {
-          // Ignore - username is optional
-        }
-      }
-
-      let vcUsername: string | null = null;
-      if (vcStatus.authenticated) {
-        try {
-          vcUsername = await getVercelUsername();
-        } catch {
-          // Ignore - username is optional
-        }
-      }
-
-      // Set all CLI states atomically
-      dispatch({
-        type: 'SET_ALL_CLI',
-        payload: {
-          github: { cliStatus: ghStatus, username: ghUsername },
-          vercel: { cliStatus: vcStatus, username: vcUsername },
-          claude: { cliStatus: clStatus },
-        },
-      });
+      // Check and set all CLI states atomically
+      await refreshAllCliStatuses();
 
       // Use full setup status to determine if onboarding is needed
       if (setupStatus.allReady) {
@@ -637,10 +493,10 @@ function App({ initialProjectPath }: AppProps) {
           void fetchBranchInfo(storedProjectPath);
           void getProjectGitHubStatus(storedProjectPath)
             .catch(() => GITHUB_STATUS_FALLBACK)
-            .then((status) => dispatch({ type: 'SET_PROJECT_GITHUB', payload: status }));
+            .then((status) => setProjectGitHubStatus(status));
           void getProjectVercelStatus(storedProjectPath)
             .catch(() => VERCEL_STATUS_FALLBACK)
-            .then((status) => dispatch({ type: 'SET_PROJECT_VERCEL', payload: status }));
+            .then((status) => setProjectVercelStatus(status));
         }
       } catch {
         // If backend check fails, let normal flow continue
@@ -702,39 +558,7 @@ function App({ initialProjectPath }: AppProps) {
   const verifySetupInBackground = async () => {
     try {
       // Full verification of auth status
-      const [ghStatus, vcStatus, clStatus] = await Promise.all([
-        checkGitHubCliStatus(),
-        checkVercelCliStatus(),
-        checkClaudeCliStatus(),
-      ]);
-
-      let ghUsername: string | null = null;
-      if (ghStatus.authenticated) {
-        try {
-          ghUsername = await getGitHubUsername();
-        } catch {
-          // Ignore - username is optional
-        }
-      }
-
-      let vcUsername: string | null = null;
-      if (vcStatus.authenticated) {
-        try {
-          vcUsername = await getVercelUsername();
-        } catch {
-          // Ignore - username is optional
-        }
-      }
-
-      // Update CLI states
-      dispatch({
-        type: 'SET_ALL_CLI',
-        payload: {
-          github: { cliStatus: ghStatus, username: ghUsername },
-          vercel: { cliStatus: vcStatus, username: vcUsername },
-          claude: { cliStatus: clStatus },
-        },
-      });
+      await refreshAllCliStatuses();
 
       // Check if any auth is now missing
       const setupStatus = await getFullSetupStatus();
@@ -752,83 +576,6 @@ function App({ initialProjectPath }: AppProps) {
     }
   };
 
-  // Generic refresh helper for authenticated integrations (GitHub, Vercel)
-  const refreshAuthenticatedIntegration = async (
-    checkStatus: () => Promise<GitHubCliStatus> | Promise<VercelCliStatus>,
-    getUsername: () => Promise<string>,
-    actionType: 'SET_GITHUB' | 'SET_VERCEL'
-  ) => {
-    const status = await checkStatus();
-    let username: string | null = null;
-    if (status.authenticated) {
-      try {
-        username = await getUsername();
-      } catch {
-        // Ignore - username is optional
-      }
-    }
-    dispatch({ type: actionType, payload: { cliStatus: status, username } });
-  };
-
-  const refreshGitHubStatus = useCallback(
-    () => refreshAuthenticatedIntegration(checkGitHubCliStatus, getGitHubUsername, 'SET_GITHUB'),
-    []
-  );
-
-  const refreshVercelStatus = useCallback(
-    () => refreshAuthenticatedIntegration(checkVercelCliStatus, getVercelUsername, 'SET_VERCEL'),
-    []
-  );
-
-  // Handle GitHub connect from overlay - opens terminal for gh auth login
-  const handleGitHubConnectFromOverlay = useCallback(() => {
-    setAuthTerminalConfig({
-      service: 'github',
-      command: 'gh',
-      args: ['auth', 'login', '--web', '--git-protocol', 'https'],
-    });
-  }, []);
-
-  const handleVercelConnectFromOverlay = useCallback(() => {
-    setAuthTerminalConfig({
-      service: 'vercel',
-      command: 'vercel',
-      args: ['login'],
-    });
-  }, []);
-
-  // Handle auth terminal exit
-  const handleAuthTerminalExit = useCallback(
-    async (exitCode: number | null) => {
-      const service = authTerminalConfig?.service;
-      setAuthTerminalConfig(null);
-
-      if (exitCode === 0 || exitCode === null) {
-        // Success - refresh the appropriate status
-        if (service === 'github') {
-          await refreshGitHubStatus();
-          // Also refresh project GitHub status if we have a project open
-          if (currentProject) {
-            const projectStatus = await getProjectGitHubStatus(currentProject.path);
-            dispatch({ type: 'SET_PROJECT_GITHUB', payload: projectStatus });
-          }
-        } else if (service === 'vercel') {
-          await refreshVercelStatus();
-          if (currentProject) {
-            const projectStatus = await getProjectVercelStatus(currentProject.path);
-            dispatch({ type: 'SET_PROJECT_VERCEL', payload: projectStatus });
-          }
-        }
-      }
-    },
-    [authTerminalConfig, currentProject, refreshGitHubStatus, refreshVercelStatus]
-  );
-
-  // Focus terminal (called after modals close)
-  const focusTerminal = useCallback(() => {
-    terminalRefsMap.current.get(activeTerminalTab)?.focus();
-  }, [activeTerminalTab]);
-
   // Handle capture for Claude - screenshot preview and paste path into terminal
   const handleCaptureForClaude = useCallback(async () => {
     if (isCapturing || !previewRef.current) return;
@@ -839,14 +586,14 @@ function App({ initialProjectPath }: AppProps) {
       if (filePath) {
         // Quote path if it contains spaces
         const quotedPath = filePath.includes(' ') ? `"${filePath}"` : filePath;
-        terminalRefsMap.current.get(activeTerminalTab)?.paste(quotedPath);
+        pasteToActiveTerminal(quotedPath);
         // Show screenshot preview toast
         setScreenshotPreviewPath(filePath);
       }
     } finally {
       setIsCapturing(false);
     }
-  }, [isCapturing, activeTerminalTab]);
+  }, [isCapturing, pasteToActiveTerminal]);
 
   // Handle full page capture - screenshot entire scrollable page and paste path into terminal
   const handleCaptureFullPage = useCallback(async () => {
@@ -858,14 +605,14 @@ function App({ initialProjectPath }: AppProps) {
       if (filePath) {
         // Quote path if it contains spaces
         const quotedPath = filePath.includes(' ') ? `"${filePath}"` : filePath;
-        terminalRefsMap.current.get(activeTerminalTab)?.paste(quotedPath);
+        pasteToActiveTerminal(quotedPath);
         // Show screenshot preview toast
         setScreenshotPreviewPath(filePath);
       }
     } finally {
       setIsFullPageCapturing(false);
     }
-  }, [isFullPageCapturing, activeTerminalTab]);
+  }, [isFullPageCapturing, pasteToActiveTerminal]);
 
   // Handle crop mode start - show loading state
   const handleCropStart = useCallback(() => {
@@ -879,12 +626,12 @@ function App({ initialProjectPath }: AppProps) {
       setIsCropCapturing(false);
       if (filePath) {
         const quotedPath = filePath.includes(' ') ? `"${filePath}"` : filePath;
-        terminalRefsMap.current.get(activeTerminalTab)?.paste(quotedPath);
+        pasteToActiveTerminal(quotedPath);
         // Show screenshot preview toast
         setScreenshotPreviewPath(filePath);
       }
     },
-    [activeTerminalTab]
+    [pasteToActiveTerminal]
   );
 
   // Handle crop mode cancel
@@ -1093,9 +840,9 @@ function App({ initialProjectPath }: AppProps) {
   // Send prompt to Claude terminal
   const sendToClaude = useCallback(
     (prompt: string) => {
-      terminalRefsMap.current.get(activeTerminalTab)?.paste(prompt);
+      pasteToActiveTerminal(prompt);
     },
-    [activeTerminalTab]
+    [pasteToActiveTerminal]
   );
 
   // Handle health check output
@@ -1107,49 +854,6 @@ function App({ initialProjectPath }: AppProps) {
     }
     setHealthOutputVersion((v) => v + 1);
   }, []);
-
-  // Kill all terminal processes
-  const killAllTerminals = useCallback(() => {
-    terminalRefsMap.current.forEach((ref) => {
-      ref?.kill();
-    });
-    terminalRefsMap.current.clear();
-  }, []);
-
-  // Terminal tab management
-  const addTerminalTab = useCallback(() => {
-    if (terminalTabs.length >= MAX_TERMINAL_TABS) return;
-    const newTabId = ++terminalTabCounterRef.current;
-    setTerminalTabs((prev) => [...prev, newTabId]);
-    setActiveTerminalTab(newTabId);
-  }, [terminalTabs.length]);
-
-  const closeTerminalTab = useCallback(
-    (tabId: number) => {
-      // Don't close if it's the last tab
-      if (terminalTabs.length <= 1) return;
-
-      // Kill the PTY process BEFORE removing from state to prevent orphaned processes
-      const ref = terminalRefsMap.current.get(tabId);
-      if (ref) {
-        ref.kill();
-      }
-
-      setTerminalTabs((prev) => {
-        const newTabs = prev.filter((id) => id !== tabId);
-        // If we're closing the active tab, switch to the previous one or the first
-        if (tabId === activeTerminalTab) {
-          const closedIndex = prev.indexOf(tabId);
-          const newActiveIndex = Math.max(0, closedIndex - 1);
-          setActiveTerminalTab(newTabs[newActiveIndex]);
-        }
-        return newTabs;
-      });
-      // Clean up the ref
-      terminalRefsMap.current.delete(tabId);
-    },
-    [terminalTabs, activeTerminalTab]
-  );
 
   // Handle terminal exit (memoized to prevent re-spawning Claude on every render)
   const handleTerminalExit = useCallback((code: number | null) => {
@@ -1376,11 +1080,7 @@ function App({ initialProjectPath }: AppProps) {
     setIsVercelAutoConnecting(false);
 
     // Kill all terminals and reset tabs
-    killAllTerminals();
-    terminalTabCounterRef.current = 1;
-    setTerminalTabs([1]);
-    setActiveTerminalTab(1);
-    setTerminalSessionId((prev) => prev + 1);
+    resetTerminals();
     setShowDevServerLogs(false);
 
     setCurrentProject(project);
@@ -1456,7 +1156,7 @@ function App({ initialProjectPath }: AppProps) {
     void getProjectGitHubStatus(project.path)
       .catch(() => GITHUB_STATUS_FALLBACK)
       .then((ghStatus) => {
-        dispatch({ type: 'SET_PROJECT_GITHUB', payload: ghStatus });
+        setProjectGitHubStatus(ghStatus);
       });
     void getProjectVercelStatus(project.path)
       .catch(() => VERCEL_STATUS_FALLBACK)
@@ -1468,7 +1168,7 @@ function App({ initialProjectPath }: AppProps) {
           production_url: vcStatus.production_url,
           staging_url: vcStatus.staging_url,
         });
-        dispatch({ type: 'SET_PROJECT_VERCEL', payload: vcStatus });
+        setProjectVercelStatus(vcStatus);
       });
 
     // Capture screenshots periodically - check ref to avoid stale closure
@@ -1543,11 +1243,7 @@ function App({ initialProjectPath }: AppProps) {
     setChangedFiles([]);
 
     // Kill all terminals and reset tabs
-    killAllTerminals();
-    terminalTabCounterRef.current = 1;
-    setTerminalTabs([1]);
-    setActiveTerminalTab(1);
-    setTerminalSessionId((prev) => prev + 1);
+    resetTerminals();
     setShowDevServerLogs(false);
 
     // Stop dev server if running
@@ -1573,7 +1269,7 @@ function App({ initialProjectPath }: AppProps) {
     }
 
     setCurrentProject(null);
-    dispatch({ type: 'CLEAR_PROJECT_STATUSES' });
+    clearProjectStatuses();
     setView('projects');
 
     // Reset window title when closing project
@@ -1711,18 +1407,13 @@ function App({ initialProjectPath }: AppProps) {
         const ghStatus = await getProjectGitHubStatus(currentProject.path).catch(
           () => GITHUB_STATUS_FALLBACK
         );
-        dispatch({
-          type: 'SET_PROJECT_STATUSES',
-          payload: {
-            github: ghStatus,
-            vercel: {
-              status: 'connected',
-              project_name: currentProject.name,
-              production_url: vercelDeployedUrl.replace(/^https?:\/\//, ''),
-              staging_url: null,
-              vercel_org: null,
-            },
-          },
+        setProjectGitHubStatus(ghStatus);
+        setProjectVercelStatus({
+          status: 'connected',
+          project_name: currentProject.name,
+          production_url: vercelDeployedUrl.replace(/^https?:\/\//, ''),
+          staging_url: null,
+          vercel_org: null,
         });
         return;
       }
@@ -1730,25 +1421,22 @@ function App({ initialProjectPath }: AppProps) {
       // Dispatch each independently so fast results aren't blocked by slow ones
       void getProjectGitHubStatus(currentProject.path)
         .catch(() => GITHUB_STATUS_FALLBACK)
-        .then((status) => dispatch({ type: 'SET_PROJECT_GITHUB', payload: status }));
+        .then((status) => setProjectGitHubStatus(status));
       void getProjectVercelStatus(currentProject.path)
         .catch(() => VERCEL_STATUS_FALLBACK)
-        .then((status) => dispatch({ type: 'SET_PROJECT_VERCEL', payload: status }));
+        .then((status) => setProjectVercelStatus(status));
     }
   };
 
   const handleVercelStatusChange = async (deployedUrl?: string) => {
     // If we have a deployed URL from a successful deployment, use it directly
     if (deployedUrl && currentProject) {
-      dispatch({
-        type: 'SET_PROJECT_VERCEL',
-        payload: {
-          status: 'connected',
-          project_name: currentProject.name,
-          production_url: deployedUrl,
-          staging_url: integrations.projectVercel?.staging_url ?? null,
-          vercel_org: integrations.projectVercel?.vercel_org ?? null,
-        },
+      setProjectVercelStatus({
+        status: 'connected',
+        project_name: currentProject.name,
+        production_url: deployedUrl,
+        staging_url: integrations.projectVercel?.staging_url ?? null,
+        vercel_org: integrations.projectVercel?.vercel_org ?? null,
       });
       return;
     }
@@ -1757,7 +1445,7 @@ function App({ initialProjectPath }: AppProps) {
       const status = await getProjectVercelStatus(currentProject.path).catch(
         () => VERCEL_STATUS_FALLBACK
       );
-      dispatch({ type: 'SET_PROJECT_VERCEL', payload: status });
+      setProjectVercelStatus(status);
     }
   };
 
@@ -1829,7 +1517,7 @@ function App({ initialProjectPath }: AppProps) {
                   </span>
                   <button
                     className="onboarding-terminal-cancel"
-                    onClick={() => setAuthTerminalConfig(null)}
+                    onClick={() => closeAuthTerminal()}
                   >
                     Cancel
                   </button>
@@ -1837,7 +1525,7 @@ function App({ initialProjectPath }: AppProps) {
                 <OnboardingTerminal
                   command={authTerminalConfig.command}
                   args={authTerminalConfig.args}
-                  onExit={(exitCode) => void handleAuthTerminalExit(exitCode)}
+                  onExit={(exitCode) => void handleAuthTerminalExit(exitCode, currentProject?.path)}
                 />
               </div>
             </div>
@@ -1948,7 +1636,7 @@ function App({ initialProjectPath }: AppProps) {
                 projectName={currentProject?.name || ''}
                 onStatusChange={handleGitHubStatusChange}
                 onGitHubConnect={handleGitHubConnectFromOverlay}
-                onModalClose={focusTerminal}
+                onModalClose={focusActiveTerminal}
                 onToast={showToast}
                 onVercelAutoConnectStart={() => setIsVercelAutoConnecting(true)}
                 onVercelAutoConnectEnd={() => setIsVercelAutoConnecting(false)}
@@ -1963,7 +1651,7 @@ function App({ initialProjectPath }: AppProps) {
                 projectName={currentProject?.name || ''}
                 onStatusChange={(deployedUrl) => void handleVercelStatusChange(deployedUrl)}
                 onVercelConnect={() => void refreshVercelStatus()}
-                onModalClose={focusTerminal}
+                onModalClose={focusActiveTerminal}
                 onToast={showToast}
                 isAutoConnecting={isVercelAutoConnecting}
                 currentBranch={currentBranch || 'main'}
@@ -1979,7 +1667,7 @@ function App({ initialProjectPath }: AppProps) {
                 void handleGitHubStatusChange();
                 if (currentProject) void fetchBranchInfo(currentProject.path);
               }}
-              onModalClose={focusTerminal}
+              onModalClose={focusActiveTerminal}
               onToast={showToast}
               isPublishing={isPublishing}
               setIsPublishing={setIsPublishing}
@@ -2087,7 +1775,7 @@ function App({ initialProjectPath }: AppProps) {
                           )}
                         </button>
                       ))}
-                      {terminalTabs.length < MAX_TERMINAL_TABS && (
+                      {terminalTabs.length < maxTerminalTabs && (
                         <button className="terminal-tab-add" onClick={addTerminalTab}>
                           <PlusIcon size={12} />
                         </button>
@@ -2497,7 +2185,7 @@ function App({ initialProjectPath }: AppProps) {
               }}
               onModalClose={() => {
                 setIsCompactPublishOpen(false);
-                focusTerminal();
+                focusActiveTerminal();
               }}
               onToast={showToast}
               isPublishing={isPublishing}
@@ -2541,7 +2229,7 @@ function App({ initialProjectPath }: AppProps) {
           isOpen={showEnvEditor}
           onClose={() => {
             setShowEnvEditor(false);
-            focusTerminal();
+            focusActiveTerminal();
           }}
           onToast={showToast}
         />
@@ -2551,7 +2239,7 @@ function App({ initialProjectPath }: AppProps) {
           isOpen={showAssetsPanel}
           onClose={() => {
             setShowAssetsPanel(false);
-            focusTerminal();
+            focusActiveTerminal();
           }}
           onToast={showToast}
         />
@@ -2634,7 +2322,7 @@ function App({ initialProjectPath }: AppProps) {
             }}
             onClose={() => {
               setShowSubmitReview(null);
-              focusTerminal();
+              focusActiveTerminal();
             }}
             onToast={showToast}
           />
@@ -2659,7 +2347,7 @@ function App({ initialProjectPath }: AppProps) {
             projectPath={currentProject.path}
             onClose={() => {
               setShowConflictResolution(false);
-              focusTerminal();
+              focusActiveTerminal();
             }}
             onResolved={handleConflictsResolved}
             onToast={showToast}
@@ -2674,17 +2362,14 @@ function App({ initialProjectPath }: AppProps) {
                 <span className="onboarding-terminal-title">
                   {authTerminalConfig.service === 'github' ? 'GitHub Account' : 'Vercel Account'}
                 </span>
-                <button
-                  className="onboarding-terminal-cancel"
-                  onClick={() => setAuthTerminalConfig(null)}
-                >
+                <button className="onboarding-terminal-cancel" onClick={() => closeAuthTerminal()}>
                   Cancel
                 </button>
               </div>
               <OnboardingTerminal
                 command={authTerminalConfig.command}
                 args={authTerminalConfig.args}
-                onExit={(exitCode) => void handleAuthTerminalExit(exitCode)}
+                onExit={(exitCode) => void handleAuthTerminalExit(exitCode, currentProject?.path)}
               />
             </div>
           </div>

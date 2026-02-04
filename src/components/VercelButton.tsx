@@ -13,7 +13,7 @@
  */
 
 import { useState, useRef } from 'react';
-import { VercelState } from '../App';
+import { VercelState } from '../hooks/useIntegrationStatus';
 import {
   ProjectVercelStatus,
   installVercelCli,

@@ -864,8 +864,8 @@
 /* Toast Notifications */
 .toast-container {
   position: fixed;
-  top: 12px;
-  right: 56px;
+  top: 10px;
+  right: 14px;
   display: flex;
   flex-direction: column;
   gap: 8px;
