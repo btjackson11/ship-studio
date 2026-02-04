@@ -6,6 +6,11 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.3.45
+
+- **Astro support** - Added Astro Basic template for creating new projects
+
+
 ## What's New in v0.3.44
 
 - **Vercel site URLs dropdown** — Hover over the Vercel button to quickly access production and preview URLs
