@@ -40,6 +40,17 @@
   text-overflow: ellipsis;
   min-width: 0;
   flex-shrink: 1;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s;
+}
+
+.workspace-header .project-path:hover {
+  color: var(--text-secondary);
+  text-decoration: underline;
 }
 
 .workspace-content {

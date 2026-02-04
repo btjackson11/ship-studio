@@ -151,6 +151,7 @@ pub fn run() {
             commands::projects::get_dashboard_projects,
             commands::projects::list_pages,
             commands::projects::check_sanity_installed,
+            commands::projects::open_in_finder,
             commands::projects::read_project_metadata,
             commands::projects::write_project_metadata,
             commands::projects::mark_project_opened,

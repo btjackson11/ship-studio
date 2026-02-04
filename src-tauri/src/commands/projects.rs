@@ -119,6 +119,29 @@ fn is_sveltekit_project(project_path: &std::path::Path) -> bool {
     false
 }
 
+/// Detect if this is an Astro project
+fn is_astro_project(project_path: &std::path::Path) -> bool {
+    // Check for astro.config.mjs, astro.config.js, or astro.config.ts
+    if project_path.join("astro.config.mjs").exists()
+        || project_path.join("astro.config.js").exists()
+        || project_path.join("astro.config.ts").exists()
+    {
+        return true;
+    }
+
+    // Check package.json for astro
+    let pkg_path = project_path.join("package.json");
+    if pkg_path.exists() {
+        if let Ok(contents) = std::fs::read_to_string(&pkg_path) {
+            if contents.contains("\"astro\"") {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
 /// Scan Next.js pages (app/ directory with page.tsx/js/jsx files)
 fn scan_nextjs_pages(
     dir: &std::path::Path,
@@ -248,6 +271,81 @@ fn scan_sveltekit_pages(
 
                 // Convert SvelteKit dynamic route syntax [slug] to :slug for display
                 let display_route = route.replace('[', ":").replace(']', "");
+
+                pages.push(PageInfo {
+                    route: display_route,
+                    file_path: path.to_string_lossy().to_string(),
+                });
+            }
+        }
+    }
+
+    Ok(pages)
+}
+
+/// Scan Astro pages (src/pages/ directory with .astro files)
+fn scan_astro_pages(
+    dir: &std::path::Path,
+    base_dir: &std::path::Path,
+) -> Result<Vec<PageInfo>, String> {
+    let mut pages = Vec::new();
+
+    if !dir.exists() {
+        return Ok(pages);
+    }
+
+    let entries = std::fs::read_dir(dir).map_err(|e| e.to_string())?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            let dir_name = entry.file_name().to_string_lossy().to_string();
+            // Skip hidden directories and special directories
+            if dir_name.starts_with('.') || dir_name.starts_with('_') {
+                continue;
+            }
+
+            let mut sub_pages = scan_astro_pages(&path, base_dir)?;
+            pages.append(&mut sub_pages);
+        } else {
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            // Astro uses .astro, .md, and .mdx files for pages
+            // index.astro maps to /
+            if file_name.ends_with(".astro")
+                || file_name.ends_with(".md")
+                || file_name.ends_with(".mdx")
+            {
+                let relative = path.strip_prefix(base_dir).unwrap_or(&path);
+                let relative_str = relative.to_string_lossy();
+
+                // Convert file path to route
+                let route = if file_name == "index.astro"
+                    || file_name == "index.md"
+                    || file_name == "index.mdx"
+                {
+                    // index files map to parent directory route
+                    let parent = relative.parent();
+                    match parent {
+                        Some(p) if p.as_os_str().is_empty() => "/".to_string(),
+                        Some(p) => format!("/{}", p.to_string_lossy()),
+                        None => "/".to_string(),
+                    }
+                } else {
+                    // Remove extension to get route
+                    let without_ext = relative_str
+                        .trim_end_matches(".astro")
+                        .trim_end_matches(".mdx")
+                        .trim_end_matches(".md");
+                    format!("/{}", without_ext)
+                };
+
+                // Convert Astro dynamic route syntax [slug] and [...slug] to :slug
+                let display_route = route
+                    .replace("[...", ":")
+                    .replace('[', ":")
+                    .replace(']', "");
 
                 pages.push(PageInfo {
                     route: display_route,
@@ -402,10 +500,21 @@ pub async fn get_dashboard_projects() -> Result<Vec<DashboardProject>, String> {
 }
 
 /// Scans a project's pages/routes directory for page routes.
-/// Supports both Next.js (app/ directory) and SvelteKit (src/routes/ directory).
+/// Supports Next.js (app/ directory), SvelteKit (src/routes/ directory), and Astro (src/pages/ directory).
 #[tauri::command]
 pub async fn list_pages(project_path: String) -> Result<Vec<PageInfo>, String> {
     let project = validate_project_path(&project_path)?;
+
+    // Check if this is an Astro project
+    if is_astro_project(&project) {
+        let pages_dir = project.join("src").join("pages");
+        if pages_dir.exists() {
+            let mut pages = scan_astro_pages(&pages_dir, &pages_dir)?;
+            sort_pages(&mut pages);
+            return Ok(pages);
+        }
+        return Ok(Vec::new());
+    }
 
     // Check if this is a SvelteKit project
     if is_sveltekit_project(&project) {
@@ -453,6 +562,38 @@ pub async fn check_sanity_installed(project_path: String) -> Result<bool, String
     }
 
     Ok(false)
+}
+
+/// Opens a folder in Finder (macOS)
+#[tauri::command]
+pub async fn open_in_finder(path: String) -> Result<(), String> {
+    let path = validate_project_path(&path)?;
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
 }
 
 /// Reads project metadata from .shipstudio/project.json with automatic schema migration

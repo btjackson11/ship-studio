@@ -1564,7 +1564,15 @@ function App({ initialProjectPath }: AppProps) {
             ← Projects
           </button>
           <h1>{currentProject?.name}</h1>
-          <span className="project-path">{currentProject?.path}</span>
+          <button
+            className="project-path"
+            onClick={() =>
+              currentProject?.path && void invoke('open_in_finder', { path: currentProject.path })
+            }
+            title="Open in Finder"
+          >
+            {currentProject?.path}
+          </button>
 
           <div className="workspace-header-actions">
             <button
@@ -1654,21 +1662,24 @@ function App({ initialProjectPath }: AppProps) {
                 onVercelAutoConnectEnd={() => setIsVercelAutoConnecting(false)}
               />
             </span>
-            <span data-education-id="vercel-button">
-              <VercelButton
-                vercelState={integrations.vercel}
-                projectVercelStatus={integrations.projectVercel}
-                projectGithubStatus={integrations.projectGithub}
-                projectPath={currentProject?.path || ''}
-                projectName={currentProject?.name || ''}
-                onStatusChange={(deployedUrl) => void handleVercelStatusChange(deployedUrl)}
-                onVercelConnect={() => void refreshVercelStatus()}
-                onModalClose={focusActiveTerminal}
-                onToast={showToast}
-                isAutoConnecting={isVercelAutoConnecting}
-                currentBranch={currentBranch || 'main'}
-              />
-            </span>
+            {integrations.projectGithub?.status === 'connected' &&
+              integrations.projectGithub?.github_repo && (
+                <span data-education-id="vercel-button">
+                  <VercelButton
+                    vercelState={integrations.vercel}
+                    projectVercelStatus={integrations.projectVercel}
+                    projectGithubStatus={integrations.projectGithub}
+                    projectPath={currentProject?.path || ''}
+                    projectName={currentProject?.name || ''}
+                    onStatusChange={(deployedUrl) => void handleVercelStatusChange(deployedUrl)}
+                    onVercelConnect={() => void refreshVercelStatus()}
+                    onModalClose={focusActiveTerminal}
+                    onToast={showToast}
+                    isAutoConnecting={isVercelAutoConnecting}
+                    currentBranch={currentBranch || 'main'}
+                  />
+                </span>
+              )}
             <PublishBranchDropdown
               currentBranch={currentBranch || 'main'}
               projectGithubStatus={integrations.projectGithub}
