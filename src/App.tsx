@@ -41,6 +41,7 @@ import { Preview, PreviewHandle } from './components/Preview';
 import { ProjectList } from './components/ProjectList';
 import { CreateProject } from './components/CreateProject';
 import { ImportProject } from './components/ImportProject';
+import { Changelog } from './components/Changelog';
 import { OnboardingScreen, OnboardingTerminal } from './components/setup';
 import { SplitPane } from './components/SplitPane';
 import { GitHubButton } from './components/GitHubButton';
@@ -95,7 +96,7 @@ import {
   BranchIcon,
   PullRequestIcon,
   EyeIcon,
-  PanelRightIcon,
+  EyeOffIcon,
   PlusIcon,
   ImageIcon,
   TerminalIcon,
@@ -1491,15 +1492,18 @@ function App({ initialProjectPath }: AppProps) {
       <>
         <div className="app">
           <UpdateBanner />
-          <ProjectList
-            onSelectProject={(project) => void handleSelectProject(project)}
-            onCreateProject={handleCreateProject}
-            onImportProject={handleImportProject}
-            isGitHubAuthenticated={integrations.github.cliStatus.authenticated}
-            onGitHubConnectForImport={() => void handleGitHubConnectFromOverlay()}
-            onGitHubConnect={handleGitHubConnectFromOverlay}
-            onVercelConnect={handleVercelConnectFromOverlay}
-          />
+          <div className="dashboard-with-changelog">
+            <ProjectList
+              onSelectProject={(project) => void handleSelectProject(project)}
+              onCreateProject={handleCreateProject}
+              onImportProject={handleImportProject}
+              isGitHubAuthenticated={integrations.github.cliStatus.authenticated}
+              onGitHubConnectForImport={() => void handleGitHubConnectFromOverlay()}
+              onGitHubConnect={handleGitHubConnectFromOverlay}
+              onVercelConnect={handleVercelConnectFromOverlay}
+            />
+            <Changelog />
+          </div>
           {showCreateModal && (
             <CreateProject
               onComplete={handleProjectCreated}
@@ -1742,27 +1746,26 @@ function App({ initialProjectPath }: AppProps) {
                     isPreviewHidden ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <button
-                          className="show-preview-btn"
+                          className="show-preview-btn icon-only"
                           onClick={() => void handleEnterCompactMode()}
-                          title="Enter Compact Mode"
+                          title="Compact Mode"
                           data-education-id="compact-button"
                         >
-                          <CompactIcon size={14} />
-                          <span>Compact</span>
+                          <CompactIcon size={12} />
                         </button>
                         <span data-education-id="browser-button">
                           <BrowserDropdown
                             url={`http://localhost:${devServerPort}`}
-                            buttonClassName="show-preview-btn"
+                            buttonClassName="show-preview-btn icon-only"
+                            iconOnly
                           />
                         </span>
                         <button
-                          className="show-preview-btn"
+                          className="show-preview-btn icon-only"
                           onClick={() => setIsPreviewHidden(false)}
                           title="Show Preview"
                         >
-                          <PanelRightIcon size={14} />
-                          <span>Show Preview</span>
+                          <EyeIcon size={12} />
                         </button>
                       </div>
                     ) : undefined
@@ -2047,27 +2050,26 @@ function App({ initialProjectPath }: AppProps) {
                   <div className="preview-tabs-divider" />
                   <div className="preview-actions">
                     <button
-                      className="preview-action-btn"
+                      className="preview-action-btn-icon"
                       onClick={() => void handleEnterCompactMode()}
-                      title="Enter Compact Mode"
+                      title="Compact Mode"
                       data-education-id="compact-button"
                     >
-                      <CompactIcon size={14} />
-                      <span>Compact</span>
+                      <CompactIcon size={12} />
                     </button>
                     <span data-education-id="browser-button">
                       <BrowserDropdown
                         url={`http://localhost:${devServerPort}`}
-                        buttonClassName="preview-action-btn"
+                        buttonClassName="preview-action-btn-icon"
+                        iconOnly
                       />
                     </span>
                     <button
-                      className="preview-action-btn"
+                      className="preview-action-btn-icon"
                       onClick={() => setIsPreviewHidden(true)}
                       title="Hide Preview"
                     >
-                      <PanelRightIcon size={14} />
-                      <span>Hide Preview</span>
+                      <EyeOffIcon size={12} />
                     </button>
                   </div>
                 </div>

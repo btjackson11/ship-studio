@@ -20,7 +20,7 @@
 .browser-dropdown {
   position: absolute;
   top: 100%;
-  left: 0;
+  right: 0;
   padding-top: 4px;
   min-width: 180px;
   z-index: 100;

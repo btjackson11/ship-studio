@@ -164,6 +164,10 @@ git push origin main && git push origin vX.Y.Z
 
 The `-n` flag automatically adds notes to `RELEASE_NOTES.md`. Without `-n`, you must update `RELEASE_NOTES.md` manually before running the script.
 
+### Dashboard Changelog
+
+**IMPORTANT:** Update the changelog data in `src/components/Changelog.tsx` before each release. This displays "What's New" on the dashboard sidebar. Add the new version at the top of the `CHANGELOG` array with a brief list of user-facing changes.
+
 ### What Happens After Push
 
 1. GitHub Actions builds for ARM64 + Intel, signs with Apple Developer ID, and notarizes

@@ -1,5 +1,43 @@
 /* ============ Dashboard Styles ============ */
 
+/* Dashboard with changelog sidebar layout */
+.dashboard-with-changelog {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  /* Center the whole layout */
+  justify-content: center;
+  padding: 0 24px;
+  gap: 0;
+}
+
+.dashboard-with-changelog::-webkit-scrollbar {
+  display: none;
+}
+
+/* Dashboard content column */
+.dashboard-with-changelog > .dashboard-scroll-container {
+  flex: 0 1 900px;
+  min-width: 0;
+  overflow: visible;
+}
+
+/* When inside changelog layout, don't double-scroll */
+.dashboard-with-changelog .dashboard-scroll-container {
+  overflow-y: visible;
+}
+
+/* Adjust dashboard padding when beside changelog */
+.dashboard-with-changelog .project-list.dashboard {
+  padding-left: 0;
+  padding-right: 0;
+  margin: 0;
+  max-width: none;
+}
+
 /* Scroll container that fills remaining viewport and handles scroll anywhere */
 .dashboard-scroll-container {
   flex: 1;

@@ -311,6 +311,30 @@
   flex-shrink: 0;
 }
 
+/* Icon-only preview action buttons */
+.preview-action-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.preview-action-btn-icon:hover {
+  color: var(--text-secondary);
+  background: var(--border);
+  border-color: var(--text-muted);
+}
+
 /* Preview Hidden Actions (when preview is collapsed) */
 .preview-hidden-actions {
   display: flex;
@@ -344,6 +368,21 @@
 
 .show-preview-btn svg {
   flex-shrink: 0;
+}
+
+/* Icon-only variant of show-preview-btn */
+.show-preview-btn.icon-only {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  color: var(--text-muted);
+}
+
+.show-preview-btn.icon-only:hover {
+  color: var(--text-secondary);
+  border-color: var(--text-muted);
 }
 
 /* Terminal Tabs Bar */

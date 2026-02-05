@@ -27,6 +27,8 @@ interface BrowserDropdownProps {
   url: string;
   className?: string;
   buttonClassName?: string;
+  /** When true, shows only the icon without text */
+  iconOnly?: boolean;
 }
 
 const BROWSER_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
@@ -42,6 +44,7 @@ export function BrowserDropdown({
   url,
   className = '',
   buttonClassName = 'preview-action-btn',
+  iconOnly = false,
 }: BrowserDropdownProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [browsers, setBrowsers] = useState<BrowserInfo[]>([]);
@@ -75,12 +78,14 @@ export function BrowserDropdown({
     return <IconComponent size={14} />;
   };
 
+  const iconSize = iconOnly ? 12 : 14;
+
   // If no browsers detected, show simple button
   if (browsers.length === 0) {
     return (
       <button className={buttonClassName} onClick={handleDefaultOpen} title="Open in Browser">
-        <ExternalLinkIcon size={14} />
-        <span>Open in Browser</span>
+        <ExternalLinkIcon size={iconSize} />
+        {!iconOnly && <span>Open in Browser</span>}
       </button>
     );
   }
@@ -96,9 +101,13 @@ export function BrowserDropdown({
         onClick={handleDefaultOpen}
         title="Open in Browser (click for default, hover for options)"
       >
-        <ExternalLinkIcon size={14} />
-        <span>Open in Browser</span>
-        <ChevronIcon size={10} className="browser-dropdown-chevron" />
+        <ExternalLinkIcon size={iconSize} />
+        {!iconOnly && (
+          <>
+            <span>Open in Browser</span>
+            <ChevronIcon size={10} className="browser-dropdown-chevron" />
+          </>
+        )}
       </button>
       {showDropdown && (
         <div className="browser-dropdown">
