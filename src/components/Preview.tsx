@@ -17,6 +17,7 @@ import { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallba
 import { invoke } from '@tauri-apps/api/core';
 import { useClickOutside } from '../hooks/useClickOutside';
 import { logger } from '../lib/logger';
+import { getWindowLabel } from '../lib/window';
 
 /** How often to refresh the page list (ms) */
 const PAGE_REFRESH_INTERVAL_MS = 5000;
@@ -200,6 +201,10 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   const [customWidth, setCustomWidth] = useState<number | null>(null); // null = 100% (desktop)
   const [pages, setPages] = useState<PageInfo[]>([]);
   const [currentPage, setCurrentPage] = useState('/');
+  // Separate state for controlling iframe src — only updated on explicit navigation
+  // (page select, refresh, project change). Proxy messages update currentPage (display)
+  // but NOT iframePath, so in-iframe client-side navigation doesn't cause a full reload.
+  const [iframePath, setIframePath] = useState('/');
   const [hasSanity, setHasSanity] = useState(false);
   const [sanityMissingEnvKeys, setSanityMissingEnvKeys] = useState<string[]>([]);
   const [showEnvWarning, setShowEnvWarning] = useState(false);
@@ -208,6 +213,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   const [showCmsModal, setShowCmsModal] = useState(false);
   const [cmsWebviewReady, setCmsWebviewReady] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [proxyPort, setProxyPort] = useState<number | null>(null);
 
   // Crop selection state
   const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
@@ -222,13 +228,14 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   const cropOverlayRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
 
-  // Dev server URL (for health checks and page loading)
+  // Dev server URL (for health checks - always use direct URL, not proxy)
   const devServerUrl = `http://localhost:${port}`;
   // Cache-buster to prevent showing stale content when switching projects
   const [cacheBuster, setCacheBuster] = useState(() => Date.now());
-  // For now, always use dev server directly (proxy disabled due to issues)
+  // Use proxy URL when available (for nav tracking), fall back to dev server directly
   // Add shipstudio=1 param so sites can detect they're in Ship Studio preview (e.g., to disable iframe detection)
-  const currentUrl = `${devServerUrl}${currentPage === '/' ? '' : currentPage}?_cb=${cacheBuster}&shipstudio=1`;
+  const baseUrl = proxyPort ? `http://localhost:${proxyPort}` : devServerUrl;
+  const currentUrl = `${baseUrl}${iframePath === '/' ? '' : iframePath}?_cb=${cacheBuster}&shipstudio=1`;
 
   // Reset state when project or port changes
   useEffect(() => {
@@ -237,6 +244,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     setServerReady(false);
     setRetryCount(-1); // -1 = not checking yet
     setCurrentPage('/');
+    setIframePath('/');
     setPages([]);
     setHasSanity(false);
     setSanityMissingEnvKeys([]);
@@ -319,6 +327,52 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   useEffect(() => {
     onPageChange?.(currentPage);
   }, [currentPage, onPageChange]);
+
+  // Start/stop preview proxy for navigation tracking
+  useEffect(() => {
+    if (!serverReady) {
+      setProxyPort(null);
+      return;
+    }
+
+    let cancelled = false;
+    const windowLabel = getWindowLabel();
+
+    invoke<number>('start_preview_proxy', {
+      windowLabel,
+      targetPort: port,
+    })
+      .then((proxyP) => {
+        if (!cancelled) {
+          logger.info('[Preview] Proxy started', { proxyPort: proxyP, targetPort: port });
+          setProxyPort(proxyP);
+        }
+      })
+      .catch((err) => {
+        logger.error('[Preview] Failed to start proxy, using direct URL', { error: err });
+        // Fallback: use dev server directly (current behavior)
+      });
+
+    return () => {
+      cancelled = true;
+      setProxyPort(null);
+      invoke('stop_preview_proxy', { windowLabel }).catch(() => {});
+    };
+  }, [serverReady, port]);
+
+  // Listen for navigation events from the injected proxy script
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent<{ type?: string; pathname?: string }>) => {
+      const data = event.data;
+      if (data && data.type === 'shipstudio:navigate' && typeof data.pathname === 'string') {
+        const pathname: string = data.pathname || '/';
+        // Only update if actually different (prevents feedback loops)
+        setCurrentPage((prev) => (prev === pathname ? prev : pathname));
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   useEffect(() => {
     // Skip if not ready to check yet (-1 means waiting for old server to die)
@@ -416,11 +470,15 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   }, [serverReady, devServerUrl]);
 
   const handleRefresh = () => {
+    // Sync iframePath to the actual current page so refresh loads what the user sees,
+    // not the stale iframePath from the last explicit navigation
+    setIframePath(currentPage);
     setCacheBuster(Date.now());
   };
 
   const handlePageSelect = (route: string) => {
     setCurrentPage(route);
+    setIframePath(route); // Explicit navigation — update iframe src
     setShowPageDropdown(false);
     setPageSearch('');
     // Update cache-buster to force reload with new page
@@ -482,16 +540,17 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   }, [projectPath, captureWindowScreenshot, isCapturing]);
 
   // Full-page capture using Playwright (scrolls page to trigger lazy content, then captures)
-  // Note: Uses currentUrl from page selector state - if user navigated via iframe links,
-  // this may not match. Use the page selector dropdown to ensure correct page.
+  // Uses currentPage (tracked via proxy) so it captures the actual visible page,
+  // even if the user navigated via in-iframe links.
   const captureFullPage = useCallback(async (): Promise<string | null> => {
     if (isCapturing) return null;
 
     setIsCapturing(true);
     try {
+      const captureUrl = `${baseUrl}${currentPage === '/' ? '' : currentPage}?_cb=${Date.now()}&shipstudio=1`;
       const filePath = await invoke<string>('capture_fullpage_playwright', {
         projectPath,
-        url: currentUrl,
+        url: captureUrl,
       });
       return filePath;
     } catch (error) {
@@ -501,7 +560,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     } finally {
       setIsCapturing(false);
     }
-  }, [isCapturing, projectPath, currentUrl, captureForClaude]);
+  }, [isCapturing, projectPath, baseUrl, currentPage, captureForClaude]);
 
   // Capture a specific region of the preview
   const captureRegion = useCallback(
@@ -738,34 +797,20 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   }, []);
 
   // Force refresh the preview iframe with cache busting
+  // Uses currentPage (tracked via proxy) so it refreshes the actual visible page,
+  // not the stale iframe src attribute (which doesn't update on client-side navigation).
   const refresh = useCallback(() => {
     if (iframeRef.current && serverReady) {
-      // Parse current URL and add/update cache-busting parameter
-      const currentSrc = iframeRef.current.src;
-      try {
-        const url = new URL(currentSrc);
-        // Remove old cache buster if present
-        url.searchParams.delete('_refresh');
-        // Add new cache buster
-        url.searchParams.set('_refresh', Date.now().toString());
-        // Set to blank first to ensure full reload
-        iframeRef.current.src = 'about:blank';
-        setTimeout(() => {
-          if (iframeRef.current) {
-            iframeRef.current.src = url.toString();
-          }
-        }, 100);
-      } catch {
-        // Fallback: just reload current src
-        iframeRef.current.src = 'about:blank';
-        setTimeout(() => {
-          if (iframeRef.current) {
-            iframeRef.current.src = currentSrc;
-          }
-        }, 100);
-      }
+      setIframePath(currentPage);
+      const refreshUrl = `${baseUrl}${currentPage === '/' ? '' : currentPage}?_cb=${Date.now()}&shipstudio=1`;
+      iframeRef.current.src = 'about:blank';
+      setTimeout(() => {
+        if (iframeRef.current) {
+          iframeRef.current.src = refreshUrl;
+        }
+      }, 100);
     }
-  }, [serverReady]);
+  }, [serverReady, baseUrl, currentPage]);
 
   // Expose methods to parent
   useImperativeHandle(
