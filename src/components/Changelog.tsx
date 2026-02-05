@@ -15,6 +15,13 @@ interface ChangelogEntry {
 // Keep ~15 most recent versions for the sidebar
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.3.48',
+    items: [
+      'Nuxt/Vue support - new Nuxt Basic template',
+      'Faster onboarding with batched installs',
+    ],
+  },
+  {
     version: '0.3.47',
     items: [
       'Dashboard changelog sidebar',

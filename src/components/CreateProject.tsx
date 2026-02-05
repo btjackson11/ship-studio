@@ -57,6 +57,12 @@ const TEMPLATES: Template[] = [
     description: 'A minimal Astro starter with Tailwind CSS',
     repo: 'https://github.com/ship-studio/astro-static-marketing-site-starter',
   },
+  {
+    id: 'nuxt-basic',
+    name: 'Nuxt Basic',
+    description: 'A minimal Nuxt starter with Tailwind CSS',
+    repo: 'https://github.com/ship-studio/nuxt-static-marketing-site-starter',
+  },
 ];
 
 /** Form wizard steps before creation starts */
@@ -224,18 +230,7 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
 
       // Remove .git folder so project starts fresh (not connected to template repo)
       setCurrentStep('init');
-      const rmGitId = await invoke<number>('spawn_pty', {
-        options: {
-          cwd: projectPath,
-          command: 'rm',
-          args: ['-rf', '.git'],
-          rows: 10,
-          cols: 80,
-        },
-        windowLabel: getWindowLabel(),
-      });
-
-      await waitForPtyExit(rmGitId);
+      await invoke('remove_git_history', { projectPath });
 
       // Ensure .shipstudio/ is gitignored to prevent phantom changes
       await invoke('ensure_gitignore_has_shipstudio', { projectPath: projectPath });
@@ -415,21 +410,7 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
 
       // Remove .git folder if present
       setCurrentStep('init');
-      try {
-        const rmGitId = await invoke<number>('spawn_pty', {
-          options: {
-            cwd: projectPath,
-            command: 'rm',
-            args: ['-rf', '.git'],
-            rows: 10,
-            cols: 80,
-          },
-          windowLabel: getWindowLabel(),
-        });
-        await waitForPtyExit(rmGitId);
-      } catch {
-        // Ignore if .git doesn't exist
-      }
+      await invoke('remove_git_history', { projectPath });
 
       // Ensure .shipstudio/ is gitignored
       await invoke('ensure_gitignore_has_shipstudio', { projectPath });

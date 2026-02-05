@@ -265,6 +265,7 @@ export async function startDevServer(
       LANG: 'en_US.UTF-8',
       SHELL: '/bin/zsh',
       PORT: port.toString(), // Fallback for frameworks that respect PORT env var
+      NUXT_TELEMETRY_DISABLED: '1', // Prevent Nuxt telemetry prompt from blocking dev server
     },
   });
 

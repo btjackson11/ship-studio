@@ -166,9 +166,21 @@
   font-style: italic;
 }
 
+.setup-item-progress-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
 .setup-item-progress-text {
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.setup-item-progress-hint {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .setup-item-error-container {

@@ -133,11 +133,11 @@ export const SETUP_TIME_ESTIMATES: Record<string, string> = {
   homebrew: '~30 sec',
   node: '~10 sec',
   git: '~5 sec',
-  gh: '~5 sec',
+  gh: '~1 min',
   gh_auth: '~15 sec',
   claude: '~10 sec',
   claude_auth: '~15 sec',
-  vercel: '~10 sec',
+  vercel: '~1 min',
   vercel_auth: '~15 sec',
 };
 

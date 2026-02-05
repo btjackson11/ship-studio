@@ -142,6 +142,27 @@ fn is_astro_project(project_path: &std::path::Path) -> bool {
     false
 }
 
+/// Detect if this is a Nuxt project
+fn is_nuxt_project(project_path: &std::path::Path) -> bool {
+    // Check for nuxt.config.ts or nuxt.config.js
+    if project_path.join("nuxt.config.ts").exists() || project_path.join("nuxt.config.js").exists()
+    {
+        return true;
+    }
+
+    // Check package.json for "nuxt"
+    let pkg_path = project_path.join("package.json");
+    if pkg_path.exists() {
+        if let Ok(contents) = std::fs::read_to_string(&pkg_path) {
+            if contents.contains("\"nuxt\"") {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
 /// Scan Next.js pages (app/ directory with page.tsx/js/jsx files)
 fn scan_nextjs_pages(
     dir: &std::path::Path,
@@ -358,6 +379,71 @@ fn scan_astro_pages(
     Ok(pages)
 }
 
+/// Scan Nuxt pages (pages/ directory with .vue files)
+fn scan_nuxt_pages(
+    dir: &std::path::Path,
+    base_dir: &std::path::Path,
+) -> Result<Vec<PageInfo>, String> {
+    let mut pages = Vec::new();
+
+    if !dir.exists() {
+        return Ok(pages);
+    }
+
+    let entries = std::fs::read_dir(dir).map_err(|e| e.to_string())?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            let dir_name = entry.file_name().to_string_lossy().to_string();
+            // Skip hidden directories and underscore directories
+            if dir_name.starts_with('.') || dir_name.starts_with('_') {
+                continue;
+            }
+
+            let mut sub_pages = scan_nuxt_pages(&path, base_dir)?;
+            pages.append(&mut sub_pages);
+        } else {
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            // Nuxt uses .vue files for pages
+            if file_name.ends_with(".vue") {
+                let relative = path.strip_prefix(base_dir).unwrap_or(&path);
+                let relative_str = relative.to_string_lossy();
+
+                // Convert file path to route
+                let route = if file_name == "index.vue" {
+                    // index.vue maps to parent directory route
+                    let parent = relative.parent();
+                    match parent {
+                        Some(p) if p.as_os_str().is_empty() => "/".to_string(),
+                        Some(p) => format!("/{}", p.to_string_lossy()),
+                        None => "/".to_string(),
+                    }
+                } else {
+                    // Remove .vue extension to get route
+                    let without_ext = relative_str.trim_end_matches(".vue");
+                    format!("/{}", without_ext)
+                };
+
+                // Convert Nuxt dynamic route syntax [id] and [...slug] to :id and :slug
+                let display_route = route
+                    .replace("[...", ":")
+                    .replace('[', ":")
+                    .replace(']', "");
+
+                pages.push(PageInfo {
+                    route: display_route,
+                    file_path: path.to_string_lossy().to_string(),
+                });
+            }
+        }
+    }
+
+    Ok(pages)
+}
+
 /// Sort pages with root first, then alphabetically
 fn sort_pages(pages: &mut Vec<PageInfo>) {
     pages.sort_by(|a, b| {
@@ -500,7 +586,7 @@ pub async fn get_dashboard_projects() -> Result<Vec<DashboardProject>, String> {
 }
 
 /// Scans a project's pages/routes directory for page routes.
-/// Supports Next.js (app/ directory), SvelteKit (src/routes/ directory), and Astro (src/pages/ directory).
+/// Supports Next.js (app/ directory), SvelteKit (src/routes/ directory), Astro (src/pages/ directory), and Nuxt (pages/ directory).
 #[tauri::command]
 pub async fn list_pages(project_path: String) -> Result<Vec<PageInfo>, String> {
     let project = validate_project_path(&project_path)?;
@@ -521,6 +607,17 @@ pub async fn list_pages(project_path: String) -> Result<Vec<PageInfo>, String> {
         let routes_dir = project.join("src").join("routes");
         if routes_dir.exists() {
             let mut pages = scan_sveltekit_pages(&routes_dir, &routes_dir)?;
+            sort_pages(&mut pages);
+            return Ok(pages);
+        }
+        return Ok(Vec::new());
+    }
+
+    // Check if this is a Nuxt project
+    if is_nuxt_project(&project) {
+        let pages_dir = project.join("pages");
+        if pages_dir.exists() {
+            let mut pages = scan_nuxt_pages(&pages_dir, &pages_dir)?;
             sort_pages(&mut pages);
             return Ok(pages);
         }
@@ -781,6 +878,20 @@ pub async fn ensure_gitignore_has_shipstudio(project_path: String) -> Result<(),
     Ok(())
 }
 
+/// Removes the .git directory from a project so it starts fresh (not connected to template repo).
+#[tauri::command]
+pub async fn remove_git_history(project_path: String) -> Result<(), String> {
+    let project = validate_project_path(&project_path)?;
+    let git_dir = project.join(".git");
+
+    if git_dir.exists() {
+        std::fs::remove_dir_all(&git_dir)
+            .map_err(|e| format!("Failed to remove .git directory: {}", e))?;
+    }
+
+    Ok(())
+}
+
 /// Deletes a project directory. Only allows deletion from ~/ShipStudio.
 #[tauri::command]
 pub async fn delete_project(path: String) -> Result<(), String> {
@@ -811,6 +922,8 @@ pub async fn clear_project_cache(project_path: String) -> Result<(), String> {
     let cache_dirs = [
         ".next",               // Next.js build cache
         ".svelte-kit",         // SvelteKit build cache
+        ".nuxt",               // Nuxt build cache
+        ".output",             // Nuxt output directory
         "node_modules/.cache", // Various build tool caches (babel, eslint, etc.)
         ".turbo",              // Turborepo cache
         ".swc",                // SWC compiler cache

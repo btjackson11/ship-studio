@@ -10,6 +10,7 @@ import {
   SetupItemStatus,
   SETUP_PROGRESS_MESSAGES,
   SETUP_TIME_ESTIMATES,
+  BREW_PACKAGES,
 } from '../../lib/setup';
 
 interface SetupItemProps {
@@ -149,9 +150,14 @@ function getActionButton(
   // In-progress items show the progress message
   if (item.status === 'in_progress') {
     return (
-      <span className="setup-item-progress-text">
-        {SETUP_PROGRESS_MESSAGES[item.id] || 'Working...'}
-      </span>
+      <div className="setup-item-progress-container">
+        <span className="setup-item-progress-text">
+          {SETUP_PROGRESS_MESSAGES[item.id] || 'Working...'}
+        </span>
+        {BREW_PACKAGES.has(item.id) && (
+          <span className="setup-item-progress-hint">This may take a few minutes</span>
+        )}
+      </div>
     );
   }
 
