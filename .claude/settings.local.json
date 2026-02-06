@@ -23,7 +23,10 @@
       "Bash(dir:*)",
       "Bash(powershell -Command \"\\(Get-Content ''C:\\\\Users\\\\17578\\\\AppData\\\\Roaming\\\\nvm\\\\v22.13.1\\\\node_modules\\\\npm\\\\package.json'' | ConvertFrom-Json\\).bundleDependencies | Select-String ''config''\")",
       "Bash(powershell:*)",
-      "Bash(winget:*)"
+      "Bash(winget:*)",
+      "Bash(grep:*)",
+      "Bash(git -C /Users/tyler/Desktop/Memberstack/repos/ship-studio log --oneline -10)",
+      "Bash(git -C /Users/tyler/Desktop/Memberstack/repos/ship-studio show:*)"
     ]
   }
 }
