@@ -144,6 +144,9 @@ export function PublishBranchDropdown({
     if (forceOpen && hasGitHubRepo) {
       setIsOpen(true);
       onForceOpenHandled?.();
+      // In trigger mode, the parent immediately sets forceOpen back to false.
+      // Pre-set the ref so the true→false transition doesn't close the dropdown.
+      prevForceOpenRef.current = false;
     } else if (prevForceOpen === true && forceOpen === false) {
       // Controlled mode: parent explicitly closed the dropdown
       setIsOpen(false);
