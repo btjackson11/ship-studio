@@ -1245,3 +1245,235 @@ pub fn cleanup_auth_processes_sync() -> u32 {
 pub async fn cleanup_auth_processes() -> Result<u32, String> {
     Ok(cleanup_auth_processes_sync())
 }
+
+/// Get the system CPU architecture (e.g., "aarch64" or "x86_64").
+#[tauri::command]
+pub fn get_system_arch() -> String {
+    std::env::consts::ARCH.to_string()
+}
+
+/// Download and install a specific app version (for downgrading/rewinding).
+///
+/// On macOS: downloads the .tar.gz update bundle, extracts, and swaps the .app bundle.
+/// On Windows: downloads the .nsis.zip, extracts, and runs the NSIS installer silently.
+/// The frontend should call `relaunch()` after this completes (macOS only;
+/// on Windows the installer handles restart).
+#[tauri::command]
+pub async fn install_version(app: tauri::AppHandle, version: String) -> Result<(), String> {
+    if cfg!(debug_assertions) {
+        return Err("Version rewind is only available in production builds.".to_string());
+    }
+
+    let _ = app.emit(
+        "rewind-progress",
+        serde_json::json!({ "stage": "downloading" }),
+    );
+
+    // Create temp directory
+    let temp_dir = std::env::temp_dir().join("shipstudio-rewind");
+    let _ = std::fs::remove_dir_all(&temp_dir);
+    std::fs::create_dir_all(&temp_dir).map_err(|e| format!("Cannot create temp dir: {e}"))?;
+
+    let result = install_version_platform(&app, &version, &temp_dir).await;
+
+    // Always cleanup temp dir
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    result?;
+
+    tracing::info!("Rewind: v{} installed successfully", version);
+    let _ = app.emit("rewind-progress", serde_json::json!({ "stage": "done" }));
+
+    Ok(())
+}
+
+/// Download a file from the releases repo using curl.
+async fn download_release_artifact(url: &str, dest: &std::path::Path) -> Result<(), String> {
+    tracing::info!("Rewind: downloading {}", url);
+
+    let download = tokio::process::Command::new("curl")
+        .args(["-L", "--fail", "-o", dest.to_str().unwrap(), url])
+        .output()
+        .await
+        .map_err(|e| format!("Download failed: {e}"))?;
+
+    if !download.status.success() {
+        let stderr = String::from_utf8_lossy(&download.stderr);
+        return Err(format!(
+            "Download failed. This version may not be available.\n{}",
+            stderr.lines().next().unwrap_or("")
+        ));
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+async fn install_version_platform(
+    app: &tauri::AppHandle,
+    version: &str,
+    temp_dir: &std::path::Path,
+) -> Result<(), String> {
+    let arch = std::env::consts::ARCH;
+    let arch_suffix = if arch == "aarch64" {
+        "aarch64"
+    } else {
+        "x86_64"
+    };
+
+    let url = format!(
+        "https://github.com/ship-studio/releases/releases/download/v{}/ShipStudio_darwin-{}.app.tar.gz",
+        version, arch_suffix
+    );
+
+    // Find current app bundle path (e.g., /Applications/Ship Studio.app)
+    let exe = std::env::current_exe().map_err(|e| format!("Cannot find app path: {e}"))?;
+    let app_bundle = exe
+        .parent() // MacOS
+        .and_then(|p| p.parent()) // Contents
+        .and_then(|p| p.parent()) // Ship Studio.app
+        .ok_or("Could not determine app bundle path")?
+        .to_path_buf();
+
+    tracing::info!("Rewind: app bundle at {:?}", app_bundle);
+
+    // Download the update bundle
+    let tar_path = temp_dir.join("update.tar.gz");
+    download_release_artifact(&url, &tar_path).await?;
+
+    tracing::info!("Rewind: download complete, extracting");
+    let _ = app.emit(
+        "rewind-progress",
+        serde_json::json!({ "stage": "installing" }),
+    );
+
+    // Extract the tar.gz
+    let extract_dir = temp_dir.join("extracted");
+    std::fs::create_dir_all(&extract_dir).map_err(|e| format!("Cannot create extract dir: {e}"))?;
+
+    let extract = tokio::process::Command::new("tar")
+        .args([
+            "xzf",
+            tar_path.to_str().unwrap(),
+            "-C",
+            extract_dir.to_str().unwrap(),
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("Extraction failed: {e}"))?;
+
+    if !extract.status.success() {
+        let stderr = String::from_utf8_lossy(&extract.stderr);
+        return Err(format!("Extraction failed: {}", stderr));
+    }
+
+    // Find the extracted .app bundle
+    let extracted_app = extract_dir.join("Ship Studio.app");
+    if !extracted_app.exists() {
+        return Err("Extracted app bundle not found".to_string());
+    }
+
+    // Swap the app bundle: rename current -> .old, move new -> current, delete .old
+    let backup_path = app_bundle.with_extension("app.old");
+    let _ = std::fs::remove_dir_all(&backup_path);
+
+    // Rename current app to .old (macOS allows renaming a running app)
+    std::fs::rename(&app_bundle, &backup_path)
+        .map_err(|e| format!("Cannot move current app: {e}"))?;
+
+    // Move extracted app into place
+    if let Err(e) = std::fs::rename(&extracted_app, &app_bundle) {
+        // Restore backup on failure
+        let _ = std::fs::rename(&backup_path, &app_bundle);
+        return Err(format!("Cannot install new version: {e}"));
+    }
+
+    // Cleanup backup
+    let _ = std::fs::remove_dir_all(&backup_path);
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+async fn install_version_platform(
+    app: &tauri::AppHandle,
+    version: &str,
+    temp_dir: &std::path::Path,
+) -> Result<(), String> {
+    let url = format!(
+        "https://github.com/ship-studio/releases/releases/download/v{}/ShipStudio_windows-x86_64.nsis.zip",
+        version
+    );
+
+    // Download the NSIS zip
+    let zip_path = temp_dir.join("update.nsis.zip");
+    download_release_artifact(&url, &zip_path).await?;
+
+    tracing::info!("Rewind: download complete, extracting");
+    let _ = app.emit(
+        "rewind-progress",
+        serde_json::json!({ "stage": "installing" }),
+    );
+
+    // Extract using PowerShell
+    let extract_dir = temp_dir.join("extracted");
+    let extract = tokio::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            &format!(
+                "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
+                zip_path.display(),
+                extract_dir.display()
+            ),
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("Extraction failed: {e}"))?;
+
+    if !extract.status.success() {
+        let stderr = String::from_utf8_lossy(&extract.stderr);
+        return Err(format!("Extraction failed: {}", stderr));
+    }
+
+    // Find the setup exe inside the extracted directory
+    let setup_exe = find_setup_exe(&extract_dir)?;
+    tracing::info!("Rewind: running installer {:?}", setup_exe);
+
+    // Run the NSIS installer silently — it will close the current app,
+    // install the new version, and relaunch automatically
+    let install = tokio::process::Command::new(&setup_exe)
+        .args(["/S", "--update"])
+        .spawn()
+        .map_err(|e| format!("Cannot run installer: {e}"))?;
+
+    // Detach — the installer will handle closing this process and relaunching
+    drop(install);
+
+    Ok(())
+}
+
+/// Find the NSIS setup .exe inside an extracted directory.
+#[cfg(target_os = "windows")]
+fn find_setup_exe(dir: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    for entry in walkdir::WalkDir::new(dir).max_depth(2) {
+        if let Ok(entry) = entry {
+            let path = entry.path();
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.ends_with("-setup.exe") {
+                    return Ok(path.to_path_buf());
+                }
+            }
+        }
+    }
+    Err("Setup installer not found in downloaded archive".to_string())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+async fn install_version_platform(
+    _app: &tauri::AppHandle,
+    _version: &str,
+    _temp_dir: &std::path::Path,
+) -> Result<(), String> {
+    Err("Version rewind is not yet available on this platform.".to_string())
+}

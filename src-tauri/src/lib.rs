@@ -286,6 +286,8 @@ pub fn run() {
             commands::setup::check_npm_cache_permissions,
             commands::setup::start_vercel_auth,
             commands::setup::cleanup_auth_processes,
+            commands::setup::get_system_arch,
+            commands::setup::install_version,
             commands::setup::quick_setup_check,
             commands::setup::mark_setup_complete,
             commands::setup::reset_setup_state,
