@@ -212,8 +212,8 @@
 }
 
 .plugin-toggle-btn.enabled {
-  background: var(--accent, #10b981);
-  border-color: var(--accent, #10b981);
+  background: #10b981;
+  border-color: #10b981;
   color: #fff;
 }
 
@@ -275,7 +275,7 @@
 }
 
 .plugins-install-input:focus {
-  border-color: var(--accent, #10b981);
+  border-color: #10b981;
 }
 
 .plugins-install-input::placeholder {
@@ -288,7 +288,7 @@
   padding: 0 16px;
   font-size: 12px;
   font-weight: 500;
-  background: var(--accent, #10b981);
+  background: #10b981;
   color: #fff;
   border: none;
   border-radius: 6px;
