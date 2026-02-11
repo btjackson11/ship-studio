@@ -4,8 +4,8 @@
  * All agent-specific values (binary names, flags, display strings) are
  * centralized here so the rest of the frontend is agent-agnostic.
  *
- * Currently only Claude Code is supported. Additional agents can be added
- * by defining new AgentConfig consts and updating getActiveAgent().
+ * Each terminal tab can independently run a different agent. The toolbar
+ * and UI adapt based on the active tab's agent configuration.
  *
  * @module lib/agent
  */
@@ -48,11 +48,53 @@ export const CLAUDE_CODE: AgentConfig = {
   installHint: 'Make sure Claude Code is installed: npm install -g @anthropic-ai/claude-code',
 };
 
+/** Codex agent configuration. */
+export const CODEX: AgentConfig = {
+  id: 'codex',
+  displayName: 'Codex',
+  binaryName: 'codex',
+  processName: 'codex',
+  autoAcceptFlag: '--yolo',
+  supportsSkills: true,
+  supportsStatusDetection: false,
+  loadingMessage: 'Starting Codex...',
+  notFoundMessage: 'Error starting Codex',
+  installHint: 'Make sure Codex is installed: npm install -g @openai/codex',
+};
+
+/** Raw terminal (shell) configuration — not an AI agent. */
+export const TERMINAL: AgentConfig = {
+  id: 'terminal',
+  displayName: 'Terminal',
+  binaryName: '/bin/zsh',
+  processName: 'zsh',
+  autoAcceptFlag: null,
+  supportsSkills: false,
+  supportsStatusDetection: false,
+  loadingMessage: 'Starting terminal...',
+  notFoundMessage: 'Error starting terminal',
+  installHint: 'Could not launch shell',
+};
+
+/** All available agents (AI coding assistants). */
+export const ALL_AGENTS: AgentConfig[] = [CLAUDE_CODE, CODEX];
+
+/** All options available in the tab dropdown (agents + terminal). */
+export const ALL_TAB_OPTIONS: AgentConfig[] = [CLAUDE_CODE, CODEX, TERMINAL];
+
+/**
+ * Look up an agent by its unique ID.
+ * Falls back to CLAUDE_CODE if the ID is not recognized.
+ */
+export function getAgentById(id: string): AgentConfig {
+  return ALL_TAB_OPTIONS.find((a) => a.id === id) ?? CLAUDE_CODE;
+}
+
 /**
  * Returns the currently active agent configuration.
  *
- * For now this always returns CLAUDE_CODE. In the future, this could read
- * from a config file or user preference to support multiple agents.
+ * This always returns CLAUDE_CODE and is used by backend-facing code
+ * (setup checks, AI commands) that always target Claude Code.
  */
 export function getActiveAgent(): AgentConfig {
   return CLAUDE_CODE;

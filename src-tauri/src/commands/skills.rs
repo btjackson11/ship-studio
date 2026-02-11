@@ -129,9 +129,15 @@ fn read_skills_from_plugin(plugin_path: &str, plugin_name: &str, scope: &str) ->
 
 /// List all available Claude skills from installed plugins and skills directory
 #[tauri::command]
-pub fn list_claude_skills(project_path: Option<String>) -> Vec<ClaudeSkill> {
+pub fn list_claude_skills(
+    project_path: Option<String>,
+    agent_id: Option<String>,
+) -> Vec<ClaudeSkill> {
     let mut all_skills = Vec::new();
-    let agent = crate::agent::get_active_agent();
+    let agent = agent_id
+        .as_deref()
+        .map(crate::agent::get_agent_by_id)
+        .unwrap_or_else(crate::agent::get_active_agent);
 
     let Some(home) = dirs::home_dir() else {
         return all_skills;
@@ -411,19 +417,32 @@ pub async fn install_skill(
     package: String,
     scope: String,
     project_path: Option<String>,
+    agent_id: Option<String>,
 ) -> Result<(), String> {
-    let agent = crate::agent::get_active_agent();
+    let agent = agent_id
+        .as_deref()
+        .map(crate::agent::get_agent_by_id)
+        .unwrap_or_else(crate::agent::get_active_agent);
     let home = dirs::home_dir()
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    let agent_id = agent.skills_agent_id.unwrap_or(agent.id);
+    let skills_agent_id = agent.skills_agent_id.unwrap_or(agent.id);
     let mut cmd = create_command("npx");
     cmd.args([
-        "--yes", "skills", "add", &package, "-y", "--agent", agent_id,
+        "--yes",
+        "skills",
+        "add",
+        &package,
+        "-y",
+        "--agent",
+        skills_agent_id,
     ])
     .env("PATH", get_extended_path())
-    .env("HOME", &home);
+    .env("HOME", &home)
+    .env_remove("npm_config__jsr-registry")
+    .env_remove("npm_config_npm-globalconfig")
+    .env_remove("npm_config_verify-deps-before-run");
 
     // Set working directory based on scope
     if scope == "project" {
@@ -443,7 +462,13 @@ pub async fn install_skill(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Failed to install skill: {}", stderr));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let details = if stderr.trim().is_empty() {
+            stdout
+        } else {
+            stderr
+        };
+        return Err(format!("Failed to install skill: {}", details));
     }
 
     Ok(())
@@ -456,19 +481,32 @@ pub async fn remove_skill(
     package: String,
     scope: String,
     project_path: Option<String>,
+    agent_id: Option<String>,
 ) -> Result<(), String> {
-    let agent = crate::agent::get_active_agent();
+    let agent = agent_id
+        .as_deref()
+        .map(crate::agent::get_agent_by_id)
+        .unwrap_or_else(crate::agent::get_active_agent);
     let home = dirs::home_dir()
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    let agent_id = agent.skills_agent_id.unwrap_or(agent.id);
+    let skills_agent_id = agent.skills_agent_id.unwrap_or(agent.id);
     let mut cmd = create_command("npx");
     cmd.args([
-        "--yes", "skills", "remove", &package, "-y", "--agent", agent_id,
+        "--yes",
+        "skills",
+        "remove",
+        &package,
+        "-y",
+        "--agent",
+        skills_agent_id,
     ])
     .env("PATH", get_extended_path())
-    .env("HOME", &home);
+    .env("HOME", &home)
+    .env_remove("npm_config__jsr-registry")
+    .env_remove("npm_config_npm-globalconfig")
+    .env_remove("npm_config_verify-deps-before-run");
 
     // Set working directory based on scope
     if scope == "project" {
@@ -488,7 +526,13 @@ pub async fn remove_skill(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Failed to remove skill: {}", stderr));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let details = if stderr.trim().is_empty() {
+            stdout
+        } else {
+            stderr
+        };
+        return Err(format!("Failed to remove skill: {}", details));
     }
 
     Ok(())

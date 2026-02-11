@@ -246,8 +246,7 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
             .unwrap_or(false);
 
         // Required items for setup completion (GitHub auth is optional)
-        const REQUIRED_ITEMS_MOCK: &[&str] =
-            &["homebrew", "node", "git", "gh", "claude", "claude_auth"];
+        const REQUIRED_ITEMS_MOCK: &[&str] = &["homebrew", "node", "git", "gh"];
 
         let all_ready = mock_items
             .iter()
@@ -508,7 +507,7 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
     });
 
     // Required items for setup completion (GitHub auth is optional)
-    const REQUIRED_ITEMS: &[&str] = &["homebrew", "node", "git", "gh", "claude", "claude_auth"];
+    const REQUIRED_ITEMS: &[&str] = &["homebrew", "node", "git", "gh"];
 
     let all_ready = items
         .iter()

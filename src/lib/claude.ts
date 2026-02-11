@@ -62,10 +62,14 @@ export type ClaudeSkill = AgentSkill;
 /**
  * List available agent skills from installed plugins.
  * @param projectPath - Optional project path to include project-level skills
+ * @param agentId - Optional agent ID to list skills for a specific agent
  * @returns Array of available skills
  */
-export async function listAgentSkills(projectPath?: string): Promise<AgentSkill[]> {
-  return invoke<AgentSkill[]>('list_claude_skills', { projectPath });
+export async function listAgentSkills(
+  projectPath?: string,
+  agentId?: string
+): Promise<AgentSkill[]> {
+  return invoke<AgentSkill[]>('list_claude_skills', { projectPath, agentId });
 }
 
 /** @deprecated Use listAgentSkills instead */

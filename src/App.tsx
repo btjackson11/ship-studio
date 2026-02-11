@@ -127,7 +127,7 @@ import {
   stopStaticServer,
   ProjectType,
 } from './lib/static-server';
-import { getActiveAgent } from './lib/agent';
+import { getAgentById } from './lib/agent';
 import { getProjectGitHubStatus } from './lib/github';
 import { getChangedFiles, ChangedFile } from './lib/git';
 import {
@@ -200,6 +200,8 @@ function App({ initialProjectPath }: AppProps) {
     resetTerminals,
     focusActiveTerminal,
     pasteToActiveTerminal,
+    switchTabAgent,
+    getActiveTabAgent,
   } = useTerminalManagement();
 
   // Compact mode state - starts false, set to true when Compact button is clicked
@@ -1897,18 +1899,22 @@ function App({ initialProjectPath }: AppProps) {
                 >
                   <div className="terminal-tabs-bar">
                     <div className="terminal-tabs" data-education-id="terminal-tabs">
-                      {terminalTabs.map((tabId, index) => (
+                      {terminalTabs.map((tab, index) => (
                         <button
-                          key={tabId}
-                          className={`workspace-tab ${!showDevServerLogs && activeTerminalTab === tabId ? 'active' : ''}`}
+                          key={tab.id}
+                          className={`workspace-tab ${!showDevServerLogs && activeTerminalTab === tab.id ? 'active' : ''}`}
                           onClick={() => {
                             setShowDevServerLogs(false);
                             setShowHealthLogs(false);
-                            setActiveTerminalTab(tabId);
+                            setActiveTerminalTab(tab.id);
                           }}
                         >
                           <span className="terminal-tab-number">{index + 1}</span>
-                          <TerminalTabDropdown onClose={() => closeTerminalTab(tabId)} />
+                          <TerminalTabDropdown
+                            currentAgent={getAgentById(tab.agentId)}
+                            onSwitchAgent={(agentId) => switchTabAgent(tab.id, agentId)}
+                            onClose={() => closeTerminalTab(tab.id)}
+                          />
                         </button>
                       ))}
                       {terminalTabs.length < maxTerminalTabs && (
@@ -1941,7 +1947,7 @@ function App({ initialProjectPath }: AppProps) {
                         <ActivityIcon size={12} />
                       </button>
                       <ToolbarDropdown
-                        agent={getActiveAgent()}
+                        agent={getActiveTabAgent()}
                         autoAcceptMode={autoAcceptMode}
                         onNotificationSettings={() => setShowNotificationSettings(true)}
                         onSkills={() => setShowSkillsModal(true)}
@@ -1973,21 +1979,22 @@ function App({ initialProjectPath }: AppProps) {
                     </div>
                   </div>
                   <div className="terminal-content" data-education-id="claude-terminal">
-                    {terminalTabs.map((tabId) => (
+                    {terminalTabs.map((tab) => (
                       <div
-                        key={`session-${terminalSessionId}-tab-${tabId}`}
+                        key={`session-${terminalSessionId}-tab-${tab.id}`}
                         className="terminal-tab-content"
                         style={{
                           display:
-                            !showDevServerLogs && activeTerminalTab === tabId ? 'block' : 'none',
+                            !showDevServerLogs && activeTerminalTab === tab.id ? 'block' : 'none',
                         }}
                       >
                         <Terminal
                           ref={(ref) => {
                             if (ref) {
-                              terminalRefsMap.current.set(tabId, ref);
+                              terminalRefsMap.current.set(tab.id, ref);
                             }
                           }}
+                          agent={getAgentById(tab.agentId)}
                           projectPath={currentProject?.path || ''}
                           onExit={handleTerminalExit}
                           autoAcceptMode={autoAcceptMode}
@@ -2434,6 +2441,7 @@ function App({ initialProjectPath }: AppProps) {
             settings={notificationSettings}
             onSave={handleSaveNotificationSettings}
             onClose={() => setShowNotificationSettings(false)}
+            agentDisplayName={getActiveTabAgent().displayName}
           />
         )}
 
@@ -2449,6 +2457,8 @@ function App({ initialProjectPath }: AppProps) {
           isOpen={showSkillsModal}
           onClose={() => setShowSkillsModal(false)}
           projectPath={currentProject?.path}
+          agentId={getActiveTabAgent().id}
+          agentDisplayName={getActiveTabAgent().displayName}
         />
 
         {/* Plugin Manager */}
@@ -2468,9 +2478,9 @@ function App({ initialProjectPath }: AppProps) {
               </div>
               <h3>Enable Auto-Accept Mode?</h3>
               <p>
-                This mode allows {getActiveAgent().displayName} to execute commands{' '}
-                <strong>without asking for permission</strong>. {getActiveAgent().displayName} will
-                be able to:
+                This mode allows {getActiveTabAgent().displayName} to execute commands{' '}
+                <strong>without asking for permission</strong>. {getActiveTabAgent().displayName}{' '}
+                will be able to:
               </p>
               <ul className="auto-accept-warning-list">
                 <li>Read and modify any files in your project</li>

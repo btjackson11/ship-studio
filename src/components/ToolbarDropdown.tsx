@@ -73,16 +73,18 @@ export function ToolbarDropdown({
             <BellIcon size={14} />
             <span>Notification sounds</span>
           </button>
-          <button
-            className="toolbar-dropdown-item"
-            onClick={() => {
-              setIsOpen(false);
-              onSkills();
-            }}
-          >
-            <ZapIcon size={14} />
-            <span>Skills</span>
-          </button>
+          {agent.supportsSkills && (
+            <button
+              className="toolbar-dropdown-item"
+              onClick={() => {
+                setIsOpen(false);
+                onSkills();
+              }}
+            >
+              <ZapIcon size={14} />
+              <span>Skills</span>
+            </button>
+          )}
           {agent.autoAcceptFlag && (
             <button
               className={`toolbar-dropdown-item ${autoAcceptMode ? 'auto-accept-on' : ''}`}

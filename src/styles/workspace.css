@@ -502,6 +502,25 @@
   background: rgba(239, 68, 68, 0.1);
 }
 
+.terminal-tab-dropdown-item.active {
+  color: var(--accent);
+}
+
+.terminal-tab-dropdown-label {
+  padding: 4px 10px 2px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.terminal-tab-dropdown-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
 .terminal-tab-add {
   display: flex;
   align-items: center;

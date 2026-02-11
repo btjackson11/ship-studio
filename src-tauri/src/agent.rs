@@ -66,10 +66,38 @@ pub const CLAUDE_CODE: AgentConfig = AgentConfig {
     setup_display_names: ("Claude Code", "Claude Account"),
 };
 
+/// Codex agent configuration.
+pub const CODEX: AgentConfig = AgentConfig {
+    id: "codex",
+    display_name: "Codex",
+    binary_name: "codex",
+    process_name: "codex",
+    version_flag: "--version",
+    print_mode_flags: &[],
+    auto_accept_flag: Some("--yolo"),
+    auth_trigger_args: &[],
+    auth_config_dir: ".codex",
+    auth_indicators: &["auth.json"],
+    skills_agent_id: Some("codex"),
+    skills_dir_name: Some("skills"),
+    install_command_unix: Some("npm install -g @openai/codex"),
+    install_message_windows: Some("Install Codex: npm install -g @openai/codex"),
+    setup_item_ids: ("codex", "codex_auth"),
+    setup_display_names: ("Codex", "Codex Account"),
+};
+
 /// Returns the currently active agent configuration.
 ///
 /// For now this always returns `CLAUDE_CODE`. In the future, this could read
 /// from a config file or environment variable to support multiple agents.
 pub fn get_active_agent() -> &'static AgentConfig {
     &CLAUDE_CODE
+}
+
+/// Look up an agent by its unique ID. Falls back to `CLAUDE_CODE` if unrecognized.
+pub fn get_agent_by_id(id: &str) -> &'static AgentConfig {
+    match id {
+        "codex" => &CODEX,
+        _ => &CLAUDE_CODE,
+    }
 }

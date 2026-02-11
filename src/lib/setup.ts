@@ -80,7 +80,7 @@ export interface FullSetupStatus {
 }
 
 /** Items that are optional and can be skipped during onboarding */
-export const OPTIONAL_ITEMS = new Set(['gh_auth']);
+export const OPTIONAL_ITEMS = new Set(['gh_auth', 'claude', 'claude_auth']);
 
 /** Quick setup check result (fast Tier-1 check) */
 export interface QuickSetupCheck {

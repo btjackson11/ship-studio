@@ -22,7 +22,7 @@ import { listen } from '@tauri-apps/api/event';
 import { homeDir } from '@tauri-apps/api/path';
 import { loadNerdFonts } from '../lib/fonts';
 import { isWindows } from '../lib/setup';
-import { getActiveAgent } from '../lib/agent';
+import type { AgentConfig } from '../lib/agent';
 import '@xterm/xterm/css/xterm.css';
 
 /** Agent status based on terminal title */
@@ -33,6 +33,8 @@ export type ClaudeStatus = AgentStatus;
 
 /** Props for the Terminal component */
 interface TerminalProps {
+  /** Agent configuration to use for this terminal */
+  agent: AgentConfig;
   /** Absolute path to the project directory where the agent will run */
   projectPath: string;
   /** Callback fired when the agent process exits */
@@ -59,7 +61,7 @@ export interface TerminalHandle {
 }
 
 export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
-  { projectPath, onExit, autoAcceptMode = false, onStatusChange },
+  { agent, projectPath, onExit, autoAcceptMode = false, onStatusChange },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -236,7 +238,6 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     // Claude Code updates the terminal title with icons:
     // - Dot (· char ~10242/10256) when thinking/processing
     // - Star (* char ~10035) when done/waiting for input
-    const agent = getActiveAgent();
     if (agent.supportsStatusDetection) {
       term.onTitleChange((title) => {
         let status: AgentStatus = 'idle';
@@ -271,7 +272,22 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
           onStatusChangeRef.current?.(status, title);
         }
       });
-    } // end supportsStatusDetection
+    }
+
+    // For agents that don't support title-based status detection,
+    // listen for OSC 9 (desktop notification) sequences instead.
+    // Codex emits OSC 9 when the agent finishes a turn.
+    if (!agent.supportsStatusDetection) {
+      term.parser.registerOscHandler(9, (_data: string) => {
+        // Treat OSC 9 as a "finished processing" signal — equivalent to
+        // the thinking→waiting transition used for title-based detection.
+        if (lastStatusRef.current !== 'waiting') {
+          lastStatusRef.current = 'waiting';
+          onStatusChangeRef.current?.('waiting', '');
+        }
+        return true;
+      });
+    }
 
     // Track if this effect instance is still mounted (handles StrictMode/HMR)
     let mounted = true;
@@ -340,9 +356,27 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         ptyRef.current = pty;
 
         // Handle PTY output -> terminal
-        pty.onData((data) => {
-          terminalRef.current?.write(data);
-        });
+        // For agents without title-based detection, add idle-detection:
+        // when output stops flowing for 1.5s after "thinking" state, transition to "waiting".
+        if (!agent.supportsStatusDetection) {
+          let idleTimer: ReturnType<typeof setTimeout> | null = null;
+          pty.onData((data) => {
+            terminalRef.current?.write(data);
+            if (lastStatusRef.current === 'thinking') {
+              if (idleTimer) clearTimeout(idleTimer);
+              idleTimer = setTimeout(() => {
+                if (lastStatusRef.current === 'thinking') {
+                  lastStatusRef.current = 'waiting';
+                  onStatusChangeRef.current?.('waiting', '');
+                }
+              }, 1500);
+            }
+          });
+        } else {
+          pty.onData((data) => {
+            terminalRef.current?.write(data);
+          });
+        }
 
         // Handle PTY exit
         pty.onExit(({ exitCode }) => {
@@ -353,6 +387,14 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         // Handle terminal input -> PTY
         term.onData((data) => {
           ptyRef.current?.write(data);
+          // When user sends input to an agent without title-based status detection,
+          // assume it transitions to "thinking" (processing the request).
+          if (!agent.supportsStatusDetection && data.includes('\r')) {
+            if (lastStatusRef.current !== 'thinking') {
+              lastStatusRef.current = 'thinking';
+              onStatusChangeRef.current?.('thinking', '');
+            }
+          }
         });
 
         // Handle special key combinations
@@ -417,7 +459,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       resizeObserver.disconnect();
       cleanup();
     };
-  }, [isReady, projectPath, cleanup, autoAcceptMode]);
+  }, [isReady, projectPath, cleanup, autoAcceptMode, agent]);
 
   // Click to focus terminal
   const handleClick = useCallback(() => {
