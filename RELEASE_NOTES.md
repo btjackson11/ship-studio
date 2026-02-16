@@ -6,6 +6,15 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.4.0
+
+- **Plugin system** - Install and manage extensions from the Plugin Library
+- **Multi-agent support** - Choose between Claude Code and Codex as your AI agent
+- **New onboarding wizard** - Step-by-step guided setup with auto-advance
+- **Vercel & Sanity CMS** - Moved to plugins (install from Plugin Library)
+- **Toolbar & terminal menus** - Cleaner workspace chrome with dropdown menus
+
+
 ## What's New in v0.3.53
 
 - **HTML/CSS/JS support** - Create and preview plain HTML projects (no framework needed)
