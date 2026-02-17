@@ -85,6 +85,9 @@ pub fn run() {
     let app_state = commands::setup::read_app_state();
     agent::init_default_agent(app_state.default_agent_id.as_deref());
 
+    // Initialize PostHog analytics (generates device_id on first launch)
+    commands::analytics::init_analytics();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
@@ -215,6 +218,12 @@ pub fn run() {
             commands::ide::crop_and_save_screenshot,
             commands::ide::compare_screenshots,
             commands::ide::stitch_screenshots,
+            // Analytics
+            commands::analytics::track_event,
+            commands::analytics::identify_user,
+            commands::analytics::get_analytics_enabled,
+            commands::analytics::set_analytics_enabled,
+            commands::analytics::get_device_id_command,
             // AI generation
             commands::ai::generate_pr_description,
             // Claude integration

@@ -19,6 +19,7 @@ import {
   type SkillSearchResult,
 } from '../lib/skills';
 import { listAgentSkills } from '../lib/claude';
+import { trackEvent, trackSearch } from '../lib/analytics';
 
 type Tab = 'installed' | 'add';
 type ScopeFilter = 'all' | 'user' | 'project';
@@ -131,6 +132,11 @@ export function SkillsModal({
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
 
+    void trackEvent('skills_searched', {
+      query: searchQuery.trim(),
+      $screen_name: 'Skills Modal',
+    });
+
     setIsSearching(true);
     setSearchError(null);
     setSearchResults([]);
@@ -151,6 +157,11 @@ export function SkillsModal({
     setInstallingPackage(pkg);
     try {
       await installSkill(pkg, installScope, projectPath, agentId);
+      void trackEvent('skill_installed', {
+        package: pkg,
+        scope: installScope,
+        $screen_name: 'Skills Modal',
+      });
       // Refresh installed skills and switch to installed tab
       await fetchSkills();
       setActiveTab('installed');
@@ -169,6 +180,11 @@ export function SkillsModal({
     try {
       // Use the plugin as the package identifier
       await removeSkill(skill.plugin, skill.scope as 'user' | 'project', projectPath, agentId);
+      void trackEvent('skill_removed', {
+        plugin: skill.plugin,
+        scope: skill.scope,
+        $screen_name: 'Skills Modal',
+      });
       // Refresh installed skills
       await fetchSkills();
     } catch (err) {
@@ -224,7 +240,10 @@ export function SkillsModal({
                     className="skills-installed-search-input"
                     placeholder="Filter skills..."
                     value={installedSearchQuery}
-                    onChange={(e) => setInstalledSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setInstalledSearchQuery(e.target.value);
+                      trackSearch('skills_filter', e.target.value, 'Skills Modal');
+                    }}
                     autoComplete="off"
                     autoCorrect="off"
                     autoCapitalize="off"

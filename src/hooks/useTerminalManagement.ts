@@ -15,6 +15,7 @@ import { useState, useRef, useCallback } from 'react';
 import type { TerminalHandle } from '../components/Terminal';
 import { getAgentById, getDefaultAgentId } from '../lib/agent';
 import type { AgentConfig } from '../lib/agent';
+import { trackEvent } from '../lib/analytics';
 
 /** Maximum number of terminal tabs allowed */
 const MAX_TERMINAL_TABS = 5;
@@ -167,6 +168,7 @@ export function useTerminalManagement(): UseTerminalManagementReturn {
 
     // Update the tab's agent
     setTerminalTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, agentId } : t)));
+    void trackEvent('agent_switched', { agent_id: agentId, $screen_name: 'Workspace' });
 
     // Increment session ID to force remount of the terminal
     setTerminalSessionId((prev) => prev + 1);

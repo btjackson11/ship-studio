@@ -10,6 +10,7 @@
  */
 
 import { readPluginBundle } from './plugins';
+import { trackError } from './analytics';
 
 /** A component that a plugin registers for a specific UI slot */
 export type SlotComponent = React.ComponentType<Record<string, never>>;
@@ -94,6 +95,7 @@ export async function loadPluginModule(
       try {
         pluginModule.onActivate();
       } catch (e) {
+        trackError('plugin_onactivate', e, 'Workspace');
         console.error(`Plugin ${pluginId} onActivate failed:`, e);
       }
     }
@@ -118,6 +120,7 @@ export function unloadPluginModule(projectPath: string, pluginId: string): void 
     try {
       mod.onDeactivate();
     } catch (e) {
+      trackError('plugin_ondeactivate', e, 'Workspace');
       console.error(`Plugin ${pluginId} onDeactivate failed:`, e);
     }
   }

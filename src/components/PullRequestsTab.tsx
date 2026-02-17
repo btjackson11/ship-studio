@@ -16,6 +16,7 @@ import {
   switchBranch,
 } from '../lib/branches';
 import { ExternalLinkIcon, WarningIcon, BranchIcon } from './icons';
+import { trackError } from '../lib/analytics';
 
 interface PullRequestsTabProps {
   /** Project path for PR operations */
@@ -66,6 +67,7 @@ export function PullRequestsTab({
       const prs = await listPullRequests(projectPath);
       setPullRequests(prs);
     } catch (e) {
+      trackError('pr_list', e, 'Workspace');
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setIsLoading(false);
@@ -82,6 +84,7 @@ export function PullRequestsTab({
       // Show post-merge cleanup dialog
       setPostMergeInfo({ branchName: headRef, baseBranch: baseRef });
     } catch (e) {
+      trackError('pr_merge', e, 'Workspace');
       onToast?.(`Failed to merge: ${String(e)}`, 'error');
     } finally {
       setMergingPr(null);
@@ -107,6 +110,7 @@ export function PullRequestsTab({
         onToast?.(result.error || 'Failed to switch branch', 'error');
       }
     } catch (e) {
+      trackError('pr_post_merge_cleanup', e, 'Workspace');
       onToast?.(`Cleanup failed: ${String(e)}`, 'error');
     } finally {
       setIsCleaningUp(false);

@@ -12,6 +12,7 @@
 
 import { useEffect, useRef } from 'react';
 import { SearchIcon, SettingsIcon, FolderPlusIcon } from './icons';
+import { trackSearch } from '../lib/analytics';
 
 interface DashboardHeaderProps {
   searchQuery: string;
@@ -60,7 +61,10 @@ export function DashboardHeader({
           type="text"
           placeholder="Search projects..."
           value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
+          onChange={(e) => {
+            onSearchChange(e.target.value);
+            trackSearch('project_search', e.target.value, 'Dashboard');
+          }}
           className="dashboard-search-input"
           autoComplete="off"
           autoCorrect="off"

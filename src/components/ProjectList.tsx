@@ -36,6 +36,7 @@ import { FolderCard } from './FolderCard';
 import { IntegrationBar } from './IntegrationBar';
 import { NewFolderModal } from './NewFolderModal';
 import { MoveFolderModal } from './MoveFolderModal';
+import { SettingsModal } from './SettingsModal';
 import { GitHubCalendar } from './GitHubCalendar';
 import { ChevronIcon, CheckIcon, ArrowLeftIcon, SlackIcon } from './icons';
 import { useClickOutside } from '../hooks/useClickOutside';
@@ -110,6 +111,9 @@ export function ProjectList({
   // Move to folder modal state
   const [moveProject, setMoveProject] = useState<DashboardProject | null>(null);
   const [moveProjectFolderId, setMoveProjectFolderId] = useState<string | null>(null);
+
+  // Settings modal state
+  const [showSettings, setShowSettings] = useState(false);
 
   // Search and sort state
   const [searchQuery, setSearchQuery] = useState('');
@@ -419,6 +423,7 @@ export function ProjectList({
           onCreateProject={onCreateProject}
           onImportProject={onImportProject}
           onCreateFolder={() => setShowNewFolderModal(true)}
+          onOpenSettings={() => setShowSettings(true)}
           isGitHubAuthenticated={isGitHubAuthenticated}
           onGitHubConnectForImport={onGitHubConnectForImport}
         />
@@ -609,6 +614,9 @@ export function ProjectList({
             </div>
           </div>
         )}
+
+        {/* Settings Modal */}
+        <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
       </div>
     </div>
   );

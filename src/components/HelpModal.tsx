@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react';
 import { CloseIcon } from './icons';
 import { listAgentSkills, AgentSkill } from '../lib/claude';
+import { trackEvent } from '../lib/analytics';
 
 interface HelpModalProps {
   isOpen: boolean;
@@ -62,6 +63,12 @@ export function HelpModal({ isOpen, onClose, projectPath }: HelpModalProps) {
       })
       .finally(() => setIsLoadingSkills(false));
   }, [isOpen, projectPath]);
+
+  useEffect(() => {
+    if (isOpen) {
+      void trackEvent('help_opened', { $screen_name: 'Workspace' });
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

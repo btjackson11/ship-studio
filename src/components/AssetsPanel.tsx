@@ -23,6 +23,7 @@ import {
   isImageFile,
   Asset,
 } from '../lib/assets';
+import { trackEvent, trackError, trackSearch } from '../lib/analytics';
 import {
   CloseIcon,
   CopyIcon,
@@ -120,6 +121,7 @@ export function AssetsPanel({ projectPath, isOpen, onClose, onToast }: AssetsPan
       const allAssets = await listAssets(projectPath);
       setAssets(allAssets);
     } catch (e) {
+      trackError('asset_load', e, 'Workspace');
       setError('Failed to load assets');
       console.error(e);
     } finally {
@@ -185,11 +187,13 @@ export function AssetsPanel({ projectPath, isOpen, onClose, onToast }: AssetsPan
         await uploadAsset(projectPath, currentPath || '/', file.name, fileData);
       }
       await loadAssets();
+      void trackEvent('asset_uploaded', { file_count: files.length, $screen_name: 'Workspace' });
       onToast?.(
         files.length === 1 ? `Uploaded ${files[0].name}` : `Uploaded ${files.length} files`,
         'success'
       );
     } catch (e) {
+      trackError('asset_upload', e, 'Workspace');
       const msg = e instanceof Error ? e.message : 'Failed to upload';
       setError(msg);
       onToast?.(msg, 'error');
@@ -213,9 +217,14 @@ export function AssetsPanel({ projectPath, isOpen, onClose, onToast }: AssetsPan
       // Second click - actually delete
       try {
         await deleteAsset(projectPath, asset.path);
+        void trackEvent('asset_deleted', {
+          is_folder: asset.isDirectory,
+          $screen_name: 'Workspace',
+        });
         await loadAssets();
         onToast?.(`Deleted ${asset.name}`, 'success');
       } catch (e) {
+        trackError('asset_delete', e, 'Workspace');
         const msg = e instanceof Error ? e.message : 'Failed to delete';
         setError(msg);
         onToast?.(msg, 'error');
@@ -256,9 +265,11 @@ export function AssetsPanel({ projectPath, isOpen, onClose, onToast }: AssetsPan
 
     try {
       await renameAsset(projectPath, renameTarget.path, renameValue.trim());
+      void trackEvent('asset_renamed', { $screen_name: 'Workspace' });
       await loadAssets();
       onToast?.(`Renamed to ${renameValue.trim()}`, 'success');
     } catch (e) {
+      trackError('asset_rename', e, 'Workspace');
       const msg = e instanceof Error ? e.message : 'Failed to rename';
       setError(msg);
       onToast?.(msg, 'error');
@@ -277,9 +288,11 @@ export function AssetsPanel({ projectPath, isOpen, onClose, onToast }: AssetsPan
 
     try {
       await createAssetFolder(projectPath, folderPath);
+      void trackEvent('asset_folder_created', { $screen_name: 'Workspace' });
       await loadAssets();
       onToast?.(`Created folder ${newFolderName.trim()}`, 'success');
     } catch (e) {
+      trackError('asset_folder_create', e, 'Workspace');
       const msg = e instanceof Error ? e.message : 'Failed to create folder';
       setError(msg);
       onToast?.(msg, 'error');
@@ -431,7 +444,10 @@ export function AssetsPanel({ projectPath, isOpen, onClose, onToast }: AssetsPan
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                trackSearch('asset_search', e.target.value, 'Workspace');
+              }}
               placeholder="Search assets..."
               autoComplete="off"
               autoCorrect="off"

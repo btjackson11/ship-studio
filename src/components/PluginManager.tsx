@@ -9,6 +9,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { CloseIcon } from './icons';
+import { trackEvent, trackError } from '../lib/analytics';
 import {
   listPlugins,
   installPlugin,
@@ -83,6 +84,7 @@ export function PluginManager({
       const result = await listPlugins(projectPath);
       setPlugins(result);
     } catch (err) {
+      trackError('plugin_list_load', err, 'Plugin Manager');
       console.error('Failed to load plugins:', err);
       setPlugins([]);
     } finally {
@@ -102,6 +104,7 @@ export function PluginManager({
       const result = await fetchPluginRegistry();
       setRegistry(result);
     } catch (err) {
+      trackError('plugin_registry_load', err, 'Plugin Manager');
       console.error('Failed to fetch plugin registry:', err);
       setRegistry([]);
     } finally {
@@ -120,9 +123,14 @@ export function PluginManager({
     setRemovingId(pluginId);
     try {
       await uninstallPlugin(projectPath, pluginId);
+      void trackEvent('plugin_uninstalled', {
+        plugin_id: pluginId,
+        $screen_name: 'Plugin Manager',
+      });
       await fetchPlugins();
       onPluginsChanged();
     } catch (err) {
+      trackError('plugin_uninstall', err, 'Plugin Manager');
       console.error('Failed to uninstall plugin:', err);
     } finally {
       setRemovingId(null);
@@ -135,9 +143,15 @@ export function PluginManager({
     setTogglingId(pluginId);
     try {
       await togglePlugin(projectPath, pluginId, enabled);
+      void trackEvent('plugin_toggled', {
+        plugin_id: pluginId,
+        enabled,
+        $screen_name: 'Plugin Manager',
+      });
       await fetchPlugins();
       onPluginsChanged();
     } catch (err) {
+      trackError('plugin_toggle', err, 'Plugin Manager');
       console.error('Failed to toggle plugin:', err);
     } finally {
       setTogglingId(null);
@@ -155,6 +169,7 @@ export function PluginManager({
         [pluginId]: result.has_update ? 'available' : 'up_to_date',
       }));
     } catch (err) {
+      trackError('plugin_update_check', err, 'Plugin Manager');
       console.error('Failed to check for update:', err);
       setUpdateStates((prev) => ({ ...prev, [pluginId]: 'idle' }));
     }
@@ -166,10 +181,12 @@ export function PluginManager({
     setUpdateStates((prev) => ({ ...prev, [pluginId]: 'updating' }));
     try {
       await updatePlugin(projectPath, pluginId);
+      void trackEvent('plugin_updated', { plugin_id: pluginId, $screen_name: 'Plugin Manager' });
       await fetchPlugins();
       onPluginsChanged();
       setUpdateStates((prev) => ({ ...prev, [pluginId]: 'up_to_date' }));
     } catch (err) {
+      trackError('plugin_update', err, 'Plugin Manager');
       console.error('Failed to update plugin:', err);
       setUpdateStates((prev) => ({ ...prev, [pluginId]: 'available' }));
     }
@@ -182,10 +199,18 @@ export function PluginManager({
     setError(null);
     try {
       await installPlugin(projectPath, entry.repo);
+      void trackEvent('plugin_installed', {
+        plugin_id: entry.id,
+        plugin_name: entry.name,
+        source: 'library',
+        category: entry.category,
+        $screen_name: 'Plugin Manager',
+      });
       await fetchPlugins();
       onPluginsChanged();
       setInstallingId(null);
     } catch (err) {
+      trackError('plugin_install', err, 'Plugin Manager');
       console.error('Failed to install plugin:', err);
       setError(err instanceof Error ? err.message : String(err));
       setInstallingId(null);
@@ -199,12 +224,18 @@ export function PluginManager({
     setError(null);
     try {
       await installPlugin(projectPath, repoUrl.trim());
+      void trackEvent('plugin_installed', {
+        source: 'url',
+        repo_url: repoUrl.trim(),
+        $screen_name: 'Plugin Manager',
+      });
       setRepoUrl('');
       setShowUrlInput(false);
       await fetchPlugins();
       setActiveTab('installed');
       onPluginsChanged();
     } catch (err) {
+      trackError('plugin_install_url', err, 'Plugin Manager');
       console.error('Failed to install plugin:', err);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -220,10 +251,16 @@ export function PluginManager({
     try {
       const result = await linkDevPlugin(projectPath);
       if (result) {
+        void trackEvent('plugin_dev_linked', {
+          plugin_id: result.manifest.id,
+          plugin_name: result.manifest.name,
+          $screen_name: 'Plugin Manager',
+        });
         await fetchPlugins();
         onPluginsChanged();
       }
     } catch (err) {
+      trackError('plugin_dev_link', err, 'Plugin Manager');
       console.error('Failed to link dev plugin:', err);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -248,9 +285,14 @@ export function PluginManager({
     setUnlinkingId(pluginId);
     try {
       await unlinkDevPlugin(projectPath, pluginId);
+      void trackEvent('plugin_dev_unlinked', {
+        plugin_id: pluginId,
+        $screen_name: 'Plugin Manager',
+      });
       await fetchPlugins();
       onPluginsChanged();
     } catch (err) {
+      trackError('plugin_dev_unlink', err, 'Plugin Manager');
       console.error('Failed to unlink dev plugin:', err);
     } finally {
       setUnlinkingId(null);

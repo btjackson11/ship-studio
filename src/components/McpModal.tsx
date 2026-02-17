@@ -11,6 +11,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { CloseIcon, SearchIcon } from './icons';
 import { type McpServer, listMcpServers, addMcpServer, removeMcpServer } from '../lib/mcp';
+import { trackEvent, trackSearch } from '../lib/analytics';
 
 type Tab = 'connected' | 'add';
 type ScopeFilter = 'all' | 'user' | 'project';
@@ -118,6 +119,7 @@ export function McpModal({
 
     try {
       await addMcpServer(addCommand.trim(), addScope, projectPath, agentId);
+      void trackEvent('mcp_server_added', { scope: addScope, $screen_name: 'MCP Modal' });
       setAddSuccess(true);
       setAddCommand('');
       // Refresh server list and switch to connected tab
@@ -138,6 +140,7 @@ export function McpModal({
     setRemovingServer(serverKey(server));
     try {
       await removeMcpServer(server.name, server.scope, projectPath, agentId);
+      void trackEvent('mcp_server_removed', { scope: server.scope, $screen_name: 'MCP Modal' });
       await fetchServers();
     } catch (err) {
       console.error('Failed to remove MCP server:', err);
@@ -209,7 +212,10 @@ export function McpModal({
                     className="mcp-search-input"
                     placeholder="Filter servers..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      trackSearch('mcp_filter', e.target.value, 'MCP Modal');
+                    }}
                     autoComplete="off"
                     autoCorrect="off"
                     autoCapitalize="off"

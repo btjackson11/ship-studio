@@ -155,10 +155,14 @@ import { UpdateBanner } from './components/UpdateBanner';
 import { invoke } from '@tauri-apps/api/core';
 import { installPlugin, listPlugins, VERCEL_PLUGIN_REPO } from './lib/plugins';
 import { logger } from './lib/logger';
+import { trackEvent } from './lib/analytics';
 import './styles/index.css';
 
 // Initialize logger
 logger.init();
+
+// Track app launch
+void trackEvent('app_launched', { $screen_name: 'Dashboard' });
 
 /** Interval between automatic screenshot captures (5 minutes) */
 const SCREENSHOT_INTERVAL_MS = 5 * 60 * 1000;
@@ -438,8 +442,11 @@ function App({ initialProjectPath }: AppProps) {
     setOpeningIde(ide);
     try {
       await invoke('open_in_ide', { projectPath: currentProject.path, ide });
-      // Command completed (IDE process spawned), reset state
-      // Dropdown closes naturally when user moves mouse away
+      void trackEvent('ide_opened', {
+        ide,
+        project_name: currentProject.name,
+        $screen_name: 'Workspace',
+      });
       setOpeningIde(null);
     } catch (e) {
       logger.error(`Failed to open in ${ide}`, { error: e });
@@ -1079,6 +1086,11 @@ function App({ initialProjectPath }: AppProps) {
     let stepStart = performance.now();
 
     logger.info(`[OpenProject] Starting: ${project.name}`, { windowLabel });
+    void trackEvent('project_opened', {
+      project_name: project.name,
+      project_path: project.path,
+      $screen_name: 'Workspace',
+    });
 
     // Guard against concurrent opens for the same project (race condition prevention)
     if (openingProjectPathRef.current === project.path) {
@@ -1237,6 +1249,11 @@ function App({ initialProjectPath }: AppProps) {
       logger.warn('[OpenProject] Failed to detect project type, defaulting to unknown');
     }
     setProjectType(detectedType);
+    void trackEvent('project_type_detected', {
+      project_type: detectedType,
+      project_name: project.name,
+      $screen_name: 'Workspace',
+    });
     logger.info(`[OpenProject] Detected project type: ${detectedType}`);
 
     // Start dev server or static server based on project type
@@ -1246,6 +1263,12 @@ function App({ initialProjectPath }: AppProps) {
       try {
         const staticPort = await startStaticServer(windowLabel, project.path);
         setDevServerPort(staticPort);
+        void trackEvent('dev_server_started', {
+          project_type: 'statichtml',
+          port: staticPort,
+          project_name: project.name,
+          $screen_name: 'Workspace',
+        });
         logger.info(`[OpenProject] Static server started on port ${staticPort}`);
       } catch (error) {
         logger.error('Failed to start static server', { error });
@@ -1258,6 +1281,12 @@ function App({ initialProjectPath }: AppProps) {
         setDevServerOutputVersion(0);
         healthOutputRef.current = '';
         setHealthOutputVersion(0);
+        void trackEvent('dev_server_started', {
+          project_type: detectedType,
+          port,
+          project_name: project.name,
+          $screen_name: 'Workspace',
+        });
         devServerRef.current = await startDevServer(project.path, port, windowLabel, (data) => {
           // Buffer output from the start so it's available when Logs tab opens
           devServerOutputRef.current += data;
@@ -1332,6 +1361,11 @@ function App({ initialProjectPath }: AppProps) {
   const handleProjectCreated = (projectPath: string) => {
     setShowCreateModal(false);
     const projectName = projectPath.split('/').pop() || 'project';
+    void trackEvent('project_created', {
+      project_name: projectName,
+      source: 'new',
+      $screen_name: 'Create Project',
+    });
     void handleSelectProject({ name: projectName, path: projectPath, thumbnail: null });
   };
 
@@ -1342,6 +1376,11 @@ function App({ initialProjectPath }: AppProps) {
   const handleProjectImported = (projectPath: string) => {
     setImportView('none');
     const projectName = projectPath.split('/').pop() || 'project';
+    void trackEvent('project_imported', {
+      project_name: projectName,
+      source: 'github',
+      $screen_name: 'Import Project',
+    });
     void handleSelectProject({ name: projectName, path: projectPath, thumbnail: null });
   };
 
@@ -1351,6 +1390,11 @@ function App({ initialProjectPath }: AppProps) {
       const path = await registerExternalProject();
       if (path) {
         const projectName = path.split('/').pop() || 'project';
+        void trackEvent('project_imported', {
+          project_name: projectName,
+          source: 'local_folder',
+          $screen_name: 'Import Project',
+        });
         void handleSelectProject({ name: projectName, path, thumbnail: null });
       }
     } catch (error) {

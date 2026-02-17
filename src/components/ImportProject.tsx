@@ -15,6 +15,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { trackError } from '../lib/analytics';
 import {
   getGitHubUsername,
   getGitHubOrgs,
@@ -84,7 +85,8 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
       setOrgs(orgList);
       // Auto-select personal account
       setSelectedOwner(user);
-    } catch {
+    } catch (err) {
+      trackError('github_accounts_load', err, 'Dashboard');
       setError('Failed to load GitHub accounts. Please check your authentication.');
     } finally {
       setLoadingAccounts(false);
@@ -111,6 +113,7 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
       repoList.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
       setRepos(repoList);
     } catch (e) {
+      trackError('github_repos_load', e, 'Dashboard');
       setError(`Failed to load repositories: ${String(e)}`);
     } finally {
       setLoadingRepos(false);
@@ -194,6 +197,7 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
       await new Promise((r) => setTimeout(r, 800));
       onComplete(importedProjectPath);
     } catch (err) {
+      trackError('project_install_retry', err, 'Dashboard');
       setError(getFriendlyError(err));
     }
   };
@@ -277,6 +281,7 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
       await new Promise((r) => setTimeout(r, 800));
       onComplete(projectPath);
     } catch (err) {
+      trackError('project_import', err, 'Dashboard');
       setError(getFriendlyError(err));
     }
   };

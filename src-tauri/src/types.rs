@@ -647,6 +647,12 @@ pub struct AppState {
     /// Default AI agent ID (e.g., "claude-code" or "codex"). None falls back to Claude Code.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_agent_id: Option<String>,
+    /// Unique device identifier for anonymous analytics (generated on first launch)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device_id: Option<String>,
+    /// Whether anonymous analytics are enabled (defaults to true)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub analytics_enabled: Option<bool>,
 }
 
 // ============ Compact Mode ============

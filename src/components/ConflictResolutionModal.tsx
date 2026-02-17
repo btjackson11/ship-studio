@@ -16,6 +16,7 @@ import {
   completeMerge,
 } from '../lib/conflicts';
 import { WarningIcon, CopyIcon, ChevronIcon, InfoIcon } from './icons';
+import { trackEvent, trackError } from '../lib/analytics';
 
 interface ConflictResolutionModalProps {
   projectPath: string;
@@ -54,6 +55,7 @@ export function ConflictResolutionModal({
         onClose();
       }
     } catch (e) {
+      trackError('conflict_load', e, 'Conflict Resolution');
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setIsLoading(false);
@@ -82,6 +84,11 @@ export function ConflictResolutionModal({
       setIsApplying(true);
       try {
         await resolveConflict(projectPath, currentFile.filePath, currentConflictIndex, resolution);
+        void trackEvent('conflict_resolved', {
+          resolution,
+          file: currentFile.filePath,
+          $screen_name: 'Conflict Resolution',
+        });
 
         // Reload conflicts to get updated state
         const updatedFiles = await getConflictInfo(projectPath);
@@ -90,6 +97,10 @@ export function ConflictResolutionModal({
         if (updatedFiles.length === 0) {
           // All conflicts resolved - complete the merge
           await completeMerge(projectPath);
+          void trackEvent('merge_completed', {
+            total_conflicts: totalConflicts,
+            $screen_name: 'Conflict Resolution',
+          });
           onToast?.('All conflicts resolved!', 'success');
           onResolved();
           onClose();
@@ -113,6 +124,7 @@ export function ConflictResolutionModal({
           }
         }
       } catch (e) {
+        trackError('conflict_resolve', e, 'Conflict Resolution');
         onToast?.(e instanceof Error ? e.message : 'Failed to resolve conflict', 'error');
       } finally {
         setIsApplying(false);
@@ -139,6 +151,7 @@ export function ConflictResolutionModal({
       onToast?.('Merge aborted', 'success');
       onClose();
     } catch (e) {
+      trackError('merge_abort', e, 'Conflict Resolution');
       onToast?.(e instanceof Error ? e.message : 'Failed to abort merge', 'error');
     } finally {
       setIsApplying(false);

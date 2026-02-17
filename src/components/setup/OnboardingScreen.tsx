@@ -18,6 +18,7 @@ import { AgentStep } from './steps/AgentStep';
 import { HostingStep } from './steps/HostingStep';
 import { CelebrationScreen } from './CelebrationScreen';
 import { OnboardingTerminal } from './OnboardingTerminal';
+import { trackEvent } from '../../lib/analytics';
 import {
   SetupItem,
   FullSetupStatus,
@@ -149,6 +150,10 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
       initDefaultAgent(agentId);
     }
     // If multiple agents, they'll be asked to pick in the agent step
+    void trackEvent('onboarding_completed', {
+      agents: status.detectedAgents,
+      $screen_name: 'Onboarding',
+    });
     setState('complete');
   }, []);
 
@@ -337,6 +342,11 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
       if (readyPairs.length > 1 && selectedAgentId) {
         await setDefaultAgentId(selectedAgentId);
         initDefaultAgent(selectedAgentId);
+        void trackEvent('default_agent_selected', {
+          agent_id: selectedAgentId,
+          agent_count: readyPairs.length,
+          $screen_name: 'Onboarding',
+        });
       } else if (readyPairs.length === 1) {
         const agentId =
           readyPairs[0].binaryId === 'claude' ? 'claude-code' : readyPairs[0].binaryId;

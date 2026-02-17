@@ -15,6 +15,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { homeDir } from '@tauri-apps/api/path';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { logger } from './logger';
+import { trackError } from './analytics';
 import { isWindows } from './setup';
 
 /** Basic project information */
@@ -234,6 +235,7 @@ export async function startDevServer(
     }
   } catch (e) {
     // Fall back to npm run dev if we can't parse package.json
+    trackError('devserver_package_json', e, 'Workspace');
     const errorMessage = e instanceof Error ? e.message : String(e);
     logger.error('[DevServer] Failed to read/parse package.json, falling back to npm run dev', {
       error: errorMessage,

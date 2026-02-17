@@ -13,6 +13,7 @@ import { publishBranch } from '../lib/branches';
 import { ChevronIcon, BranchIcon, SuccessIcon, ErrorIcon, SpinnerIcon } from './icons';
 import { useClickOutside } from '../hooks/useClickOutside';
 import { logger } from '../lib/logger';
+import { trackEvent, trackError } from '../lib/analytics';
 
 interface PublishBranchDropdownProps {
   /** Current branch name */
@@ -129,6 +130,11 @@ export function PublishBranchDropdown({
       }
 
       logger.info('Publish succeeded', { branch: currentBranch });
+      void trackEvent('branch_published', {
+        is_main: isMainBranch,
+        branch: currentBranch,
+        $screen_name: 'Workspace',
+      });
       onToast?.(isMainBranch ? 'Pushed to GitHub!' : 'Changes synced to GitHub!', 'success');
       onStatusChange();
       setPublishState({ status: 'success' });
@@ -145,6 +151,7 @@ export function PublishBranchDropdown({
       }
 
       logger.error('Publish failed', { branch: currentBranch, errorType, message });
+      trackError('git_push', e, 'Workspace');
       setPublishState({ status: 'error', message, errorType });
       onToast?.(isMainBranch ? 'Publish failed' : 'Sync failed', 'error');
 

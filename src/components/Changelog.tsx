@@ -13,6 +13,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { WarningIcon } from './icons';
+import { trackEvent, trackError } from '../lib/analytics';
 
 interface ChangelogEntry {
   version: string;
@@ -177,13 +178,22 @@ export function Changelog({ className = '' }: ChangelogProps) {
 
   const handleRewind = useCallback(async () => {
     if (!rewindVersion) return;
+    void trackEvent('version_rewind_started', {
+      target_version: rewindVersion,
+      $screen_name: 'Dashboard',
+    });
     setRewindStage('downloading');
     setRewindError(null);
 
     try {
       await invoke('install_version', { version: rewindVersion });
+      void trackEvent('version_rewind_completed', {
+        target_version: rewindVersion,
+        $screen_name: 'Dashboard',
+      });
       setRewindStage('done');
     } catch (err: unknown) {
+      trackError('version_rewind', err, 'Dashboard');
       setRewindStage('error');
       setRewindError(err instanceof Error ? err.message : String(err));
     }
@@ -192,7 +202,8 @@ export function Changelog({ className = '' }: ChangelogProps) {
   const handleRestart = useCallback(async () => {
     try {
       await relaunch();
-    } catch {
+    } catch (err) {
+      trackError('app_restart', err, 'Dashboard');
       setRewindError('Failed to restart. Please restart manually.');
     }
   }, []);

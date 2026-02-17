@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { createPullRequest } from '../lib/branches';
 import { generatePRDescription } from '../lib/ai';
 import { commitChanges } from '../lib/git';
+import { trackEvent, trackError } from '../lib/analytics';
 
 interface SubmitReviewModalProps {
   /** Project path for PR operations */
@@ -45,6 +46,7 @@ export function SubmitReviewModal({
   const [isGenerating, setIsGenerating] = useState(false);
   const [needsCommit, setNeedsCommit] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usedAiGeneration, setUsedAiGeneration] = useState(false);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -55,11 +57,14 @@ export function SubmitReviewModal({
       const result = await generatePRDescription(projectPath, baseBranch);
       setTitle(result.title);
       setDescription(result.description);
+      setUsedAiGeneration(true);
+      void trackEvent('ai_pr_description_generated', { $screen_name: 'Submit Review' });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       if (message.includes('No changes found')) {
         setNeedsCommit(true);
       } else {
+        trackError('ai_pr_generation', e, 'Submit Review');
         setError(`AI generation failed: ${message}`);
         onToast?.('Failed to generate PR description', 'error');
       }
@@ -84,8 +89,14 @@ export function SubmitReviewModal({
       const result = await generatePRDescription(projectPath, baseBranch);
       setTitle(result.title);
       setDescription(result.description);
+      setUsedAiGeneration(true);
+      void trackEvent('ai_pr_description_generated', {
+        committed_first: true,
+        $screen_name: 'Submit Review',
+      });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
+      trackError('ai_pr_commit_and_generate', e, 'Submit Review');
       setError(`Failed: ${message}`);
       onToast?.('Failed to generate PR description', 'error');
     } finally {
@@ -109,10 +120,16 @@ export function SubmitReviewModal({
         description.trim() || null,
         baseBranch
       );
+      void trackEvent('pr_created', {
+        base_branch: baseBranch,
+        used_ai: usedAiGeneration,
+        $screen_name: 'Workspace',
+      });
       onSuccess(prUrl);
       onClose();
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
+      trackError('pr_create', e, 'Submit Review');
       setError(message);
       onToast?.('Failed to create pull request', 'error');
     } finally {

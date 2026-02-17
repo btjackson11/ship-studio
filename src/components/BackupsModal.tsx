@@ -10,6 +10,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { CloseIcon, SpinnerIcon, CheckIcon, PullRequestIcon } from './icons';
 import { getBackups, restoreBackup, Backup, RestoreResult } from '../lib/backups';
+import { trackEvent } from '../lib/analytics';
 
 interface BackupsModalProps {
   isOpen: boolean;
@@ -105,6 +106,7 @@ export function BackupsModal({
 
     try {
       const result = await restoreBackup(projectPath, backup.hash);
+      void trackEvent('backup_restored', { $screen_name: 'Backups' });
       setModalState({ type: 'success', result });
       onRestore?.();
     } catch (err) {

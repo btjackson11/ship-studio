@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { getFileDiff, FileDiff, ChangeStatus } from '../lib/git';
 import { CloseIcon, FileIcon } from './icons';
+import { trackError } from '../lib/analytics';
 
 // Image extensions to detect for preview
 const IMAGE_EXTENSIONS = [
@@ -60,6 +61,7 @@ export function DiffModal({ projectPath, filePath, fileStatus, onClose }: DiffMo
       const result = await getFileDiff(projectPath, filePath);
       setDiff(result);
     } catch (e) {
+      trackError('diff_load', e, 'Workspace');
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setIsLoading(false);

@@ -22,6 +22,7 @@ import {
   ProjectGitHubStatus,
 } from '../lib/github';
 import { checkClaudeCliStatus, ClaudeCliStatus } from '../lib/claude';
+import { identifyUser } from '../lib/analytics';
 
 /** Global GitHub CLI and authentication state */
 export interface GitHubState {
@@ -190,6 +191,9 @@ export function useIntegrationStatus(): UseIntegrationStatusReturn {
     if (ghStatus.authenticated) {
       try {
         ghUsername = await getGitHubUsername();
+        if (ghUsername) {
+          void identifyUser(ghUsername, { github_username: ghUsername });
+        }
       } catch {
         // Ignore - username is optional
       }

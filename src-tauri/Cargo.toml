@@ -47,6 +47,8 @@ hyper-util = { version = "0.1", features = ["tokio", "http1", "server", "client-
 http-body-util = "0.1"
 bytes = "1"
 notify = { version = "7", default-features = false, features = ["macos_fsevent"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 tempfile = "3"

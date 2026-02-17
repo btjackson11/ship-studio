@@ -13,6 +13,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { trackError } from '../lib/analytics';
 
 /** Represents an environment file in the project */
 interface EnvFile {
@@ -125,6 +126,7 @@ export function EnvEditor({ projectPath, isOpen, onClose, onToast }: EnvEditorPr
       setHasChanges(false);
       setVisibleValues(new Set()); // Reset visibility when loading new file
     } catch (e) {
+      trackError('env_read', e, 'Workspace');
       setError(`Failed to read ${selectedFile.name}`);
       console.error(e);
     } finally {
@@ -156,6 +158,7 @@ export function EnvEditor({ projectPath, isOpen, onClose, onToast }: EnvEditorPr
       void checkSyncStatus(envFiles);
       onToast?.(`Saved ${selectedFile.name}`, 'success');
     } catch (e) {
+      trackError('env_save', e, 'Workspace');
       setError(`Failed to save ${selectedFile.name}`);
       onToast?.(`Failed to save ${selectedFile.name}`, 'error');
       console.error(e);
@@ -292,6 +295,7 @@ export function EnvEditor({ projectPath, isOpen, onClose, onToast }: EnvEditorPr
       }
       onToast?.('Synced keys to .env.example', 'success');
     } catch (e) {
+      trackError('env_sync_example', e, 'Workspace');
       setError('Failed to sync to .env.example');
       onToast?.('Failed to sync to .env.example', 'error');
       console.error(e);
@@ -328,6 +332,7 @@ export function EnvEditor({ projectPath, isOpen, onClose, onToast }: EnvEditorPr
       }
       onToast?.('Added missing keys to .env.local', 'success');
     } catch (e) {
+      trackError('env_sync_local', e, 'Workspace');
       setError('Failed to sync to .env.local');
       onToast?.('Failed to sync to .env.local', 'error');
       console.error(e);
@@ -351,6 +356,7 @@ export function EnvEditor({ projectPath, isOpen, onClose, onToast }: EnvEditorPr
       setSelectedFile({ name: fileName, path });
       onToast?.(`Created ${fileName}`, 'success');
     } catch (e) {
+      trackError('env_file_create', e, 'Workspace');
       setError(e as string);
       onToast?.(`Failed to create ${fileName}`, 'error');
     }
@@ -370,7 +376,8 @@ export function EnvEditor({ projectPath, isOpen, onClose, onToast }: EnvEditorPr
       setEnvFiles(files);
       void checkSyncStatus(files);
       onToast?.(`Deleted ${fileName}`, 'success');
-    } catch {
+    } catch (e) {
+      trackError('env_file_delete', e, 'Workspace');
       setError(`Failed to delete ${fileName}`);
       onToast?.(`Failed to delete ${fileName}`, 'error');
     }

@@ -27,6 +27,7 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { BranchIcon, PlusIcon } from './icons';
 import { UnsavedChangesModal } from './UnsavedChangesModal';
+import { trackEvent, trackError } from '../lib/analytics';
 
 interface BranchesTabProps {
   /** List of all branches */
@@ -114,6 +115,7 @@ export function BranchesTab({
       const result = await switchBranch(projectPath, branchName, false);
       if (result.success) {
         onBranchSwitch(branchName);
+        void trackEvent('branch_switched', { $screen_name: 'Workspace' });
         onToast?.(`Switched to ${branchName}`, 'success');
       } else if (result.error?.includes('Uncommitted changes')) {
         // Show the unsaved changes modal
@@ -122,6 +124,7 @@ export function BranchesTab({
         onToast?.(result.error || 'Failed to switch branch', 'error');
       }
     } catch (e) {
+      trackError('branch_switch', e, 'Workspace');
       onToast?.(`Failed to switch: ${String(e)}`, 'error');
     } finally {
       setSwitchingBranch(null);
@@ -136,9 +139,11 @@ export function BranchesTab({
 
     try {
       await deleteBranch(projectPath, branchName, true);
+      void trackEvent('branch_deleted', { $screen_name: 'Workspace' });
       onToast?.(`Deleted ${branchName}`, 'success');
       onRefresh();
     } catch (e) {
+      trackError('branch_delete', e, 'Workspace');
       onToast?.(`Failed to delete: ${String(e)}`, 'error');
     } finally {
       setDeletingBranch(null);
@@ -159,6 +164,7 @@ export function BranchesTab({
       onToast?.(`Reverted to GitHub version`, 'success');
       onRefresh();
     } catch (e) {
+      trackError('branch_revert', e, 'Workspace');
       onToast?.(`Failed to revert: ${String(e)}`, 'error');
     } finally {
       setIsReverting(false);
@@ -179,6 +185,7 @@ export function BranchesTab({
       // Create from main by default
       const baseBranch = branches.find((b) => b.isDefault)?.name || 'main';
       await createBranch(projectPath, branchName, baseBranch);
+      void trackEvent('branch_created', { from_branch: baseBranch, $screen_name: 'Workspace' });
 
       // Switch to the new branch
       const result = await switchBranch(projectPath, branchName, false);
@@ -191,6 +198,7 @@ export function BranchesTab({
       setShowNewBranch(false);
       onRefresh();
     } catch (e) {
+      trackError('branch_create', e, 'Workspace');
       onToast?.(`Failed to create branch: ${String(e)}`, 'error');
     } finally {
       setIsCreatingBranch(false);

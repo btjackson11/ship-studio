@@ -16,6 +16,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Update } from '@tauri-apps/plugin-updater';
 import { checkForUpdate, downloadAndInstall, restartApp, UpdateInfo } from '../lib/updater';
+import { trackEvent, trackError } from '../lib/analytics';
 import '../styles/update-banner.css';
 
 /** How often to check for updates (1 hour) */
@@ -71,14 +72,23 @@ export function UpdateBanner() {
 
     setStatus('downloading');
     setError(null);
+    void trackEvent('update_started', {
+      version: updateAvailable.info.version,
+      $screen_name: 'Dashboard',
+    });
 
     try {
       await downloadAndInstall(updateAvailable.update, (p) => {
         setProgress(p);
       });
+      void trackEvent('update_downloaded', {
+        version: updateAvailable.info.version,
+        $screen_name: 'Dashboard',
+      });
       setStatus('ready');
     } catch (err: unknown) {
       console.warn('[UpdateBanner] Download failed:', err);
+      trackError('update_download', err, 'Dashboard');
       setStatus('error');
       // Extract as much error info as possible
       let errorMsg = 'Update failed';
@@ -102,16 +112,22 @@ export function UpdateBanner() {
   }, [updateAvailable]);
 
   const handleRestart = useCallback(async () => {
+    void trackEvent('update_restarted', { $screen_name: 'Dashboard' });
     try {
       await restartApp();
     } catch (err) {
       console.warn('[UpdateBanner] Restart failed:', err);
+      trackError('app_restart', err, 'Dashboard');
       setError('Failed to restart. Please restart manually.');
     }
   }, []);
 
   const handleLater = useCallback(() => {
     if (updateAvailable) {
+      void trackEvent('update_deferred', {
+        version: updateAvailable.info.version,
+        $screen_name: 'Dashboard',
+      });
       // Store in sessionStorage so it shows again on next app launch
       sessionStorage.setItem(DEFERRED_UPDATE_KEY, updateAvailable.info.version);
       setDeferred(true);

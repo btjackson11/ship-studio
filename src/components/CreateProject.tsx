@@ -15,6 +15,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { UploadIcon } from './icons';
+import { trackError } from '../lib/analytics';
 import { getWindowLabel } from '../lib/window';
 import { checkNpmCachePermissions } from '../lib/setup';
 
@@ -231,6 +232,7 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
       await new Promise((r) => setTimeout(r, 800));
       onComplete(createdProjectPath);
     } catch (err) {
+      trackError('project_install_retry', err, 'Dashboard');
       setError(getFriendlyError(err));
     }
   };
@@ -315,6 +317,7 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
       await new Promise((r) => setTimeout(r, 800));
       onComplete(projectPath);
     } catch (err) {
+      trackError('project_create', err, 'Dashboard');
       setError(getFriendlyError(err));
     }
   };
@@ -496,6 +499,7 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
       await new Promise((r) => setTimeout(r, 800));
       onComplete(projectPath);
     } catch (err) {
+      trackError('project_create_zip', err, 'Dashboard');
       setError(getFriendlyError(err));
     }
   };
