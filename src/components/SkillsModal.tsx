@@ -8,8 +8,8 @@
  * @module components/SkillsModal
  */
 
-import { useEffect, useState, useCallback } from 'react';
-import { CloseIcon } from './icons';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { CloseIcon, SearchIcon } from './icons';
 import {
   type ClaudeSkill,
   checkSkillsCli,
@@ -44,6 +44,23 @@ export function SkillsModal({
   const [skills, setSkills] = useState<ClaudeSkill[]>([]);
   const [isLoadingSkills, setIsLoadingSkills] = useState(false);
   const [removingSkill, setRemovingSkill] = useState<string | null>(null);
+
+  // Installed tab search
+  const [installedSearchQuery, setInstalledSearchQuery] = useState('');
+  const [debouncedInstalledQuery, setDebouncedInstalledQuery] = useState('');
+  const installedSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const installedSearchRef = useRef<HTMLInputElement>(null);
+
+  // Debounce installed search input
+  useEffect(() => {
+    if (installedSearchTimer.current) clearTimeout(installedSearchTimer.current);
+    installedSearchTimer.current = setTimeout(() => {
+      setDebouncedInstalledQuery(installedSearchQuery);
+    }, 150);
+    return () => {
+      if (installedSearchTimer.current) clearTimeout(installedSearchTimer.current);
+    };
+  }, [installedSearchQuery]);
 
   // Add tab state
   const [searchQuery, setSearchQuery] = useState('');
@@ -96,10 +113,18 @@ export function SkillsModal({
       .catch(() => setCliAvailable(false));
   }, [isOpen, activeTab, cliAvailable]);
 
-  // Filter skills based on scope filter
+  // Filter skills based on scope filter and search query
   const filteredSkills = skills.filter((skill) => {
-    if (scopeFilter === 'all') return true;
-    return skill.scope === scopeFilter;
+    if (scopeFilter !== 'all' && skill.scope !== scopeFilter) return false;
+    if (debouncedInstalledQuery) {
+      const q = debouncedInstalledQuery.toLowerCase();
+      return (
+        skill.name.toLowerCase().includes(q) ||
+        skill.description.toLowerCase().includes(q) ||
+        skill.plugin.toLowerCase().includes(q)
+      );
+    }
+    return true;
   });
 
   // Handle search
@@ -190,25 +215,42 @@ export function SkillsModal({
         <div className="skills-modal-body">
           {activeTab === 'installed' && (
             <>
-              <div className="skills-filter-bar">
-                <button
-                  className={`skills-filter-btn ${scopeFilter === 'all' ? 'active' : ''}`}
-                  onClick={() => setScopeFilter('all')}
-                >
-                  All
-                </button>
-                <button
-                  className={`skills-filter-btn ${scopeFilter === 'user' ? 'active' : ''}`}
-                  onClick={() => setScopeFilter('user')}
-                >
-                  User
-                </button>
-                <button
-                  className={`skills-filter-btn ${scopeFilter === 'project' ? 'active' : ''}`}
-                  onClick={() => setScopeFilter('project')}
-                >
-                  Project
-                </button>
+              <div className="skills-installed-controls">
+                <div className="skills-installed-search">
+                  <SearchIcon size={12} />
+                  <input
+                    ref={installedSearchRef}
+                    type="text"
+                    className="skills-installed-search-input"
+                    placeholder="Filter skills..."
+                    value={installedSearchQuery}
+                    onChange={(e) => setInstalledSearchQuery(e.target.value)}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                  />
+                </div>
+                <div className="skills-filter-bar">
+                  <button
+                    className={`skills-filter-btn ${scopeFilter === 'all' ? 'active' : ''}`}
+                    onClick={() => setScopeFilter('all')}
+                  >
+                    All
+                  </button>
+                  <button
+                    className={`skills-filter-btn ${scopeFilter === 'user' ? 'active' : ''}`}
+                    onClick={() => setScopeFilter('user')}
+                  >
+                    User
+                  </button>
+                  <button
+                    className={`skills-filter-btn ${scopeFilter === 'project' ? 'active' : ''}`}
+                    onClick={() => setScopeFilter('project')}
+                  >
+                    Project
+                  </button>
+                </div>
               </div>
 
               {isLoadingSkills && skills.length === 0 && (
@@ -220,9 +262,11 @@ export function SkillsModal({
 
               {!isLoadingSkills && filteredSkills.length === 0 && (
                 <div className="skills-empty">
-                  {scopeFilter === 'all'
-                    ? 'No skills installed yet'
-                    : `No ${scopeFilter}-scoped skills installed`}
+                  {debouncedInstalledQuery
+                    ? 'No matching skills found'
+                    : scopeFilter === 'all'
+                      ? 'No skills installed yet'
+                      : `No ${scopeFilter}-scoped skills installed`}
                 </div>
               )}
 

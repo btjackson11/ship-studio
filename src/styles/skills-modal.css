@@ -103,11 +103,57 @@
   background: var(--text-muted);
 }
 
+/* Installed Tab Controls */
+.skills-installed-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.skills-installed-search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 26px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  transition: border-color 0.15s;
+}
+
+.skills-installed-search:focus-within {
+  border-color: var(--text-muted);
+}
+
+.skills-installed-search svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.skills-installed-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 11px;
+  color: var(--text-primary);
+  padding: 0;
+  min-width: 0;
+}
+
+.skills-installed-search-input::placeholder {
+  color: var(--text-muted);
+}
+
 /* Filter Buttons */
 .skills-filter-bar {
   display: flex;
   gap: 6px;
-  margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 .skills-filter-btn {
