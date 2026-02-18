@@ -13,7 +13,6 @@ import { ImportProject } from './ImportProject';
 import { ImportTypePicker } from './ImportTypePicker';
 import { Changelog } from './Changelog';
 import { PluginSlot } from './PluginSlot';
-import { BugReportButton } from './BugReportButton';
 import { UpdateBanner } from './UpdateBanner';
 import { OnboardingTerminal } from './setup';
 import type { Project } from '../lib/project';
@@ -141,7 +140,6 @@ export function ProjectsView({
           </div>
         )}
       </div>
-      <BugReportButton />
     </>
   );
 }

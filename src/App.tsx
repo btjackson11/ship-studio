@@ -40,7 +40,6 @@ import { useAppSetup } from './hooks/useAppSetup';
 import { ProjectsView } from './components/ProjectsView';
 import { WorkspaceView } from './components/WorkspaceView';
 import { OnboardingScreen } from './components/setup';
-import { BugReportButton } from './components/BugReportButton';
 import { Project } from './lib/project';
 import { markSetupComplete, getDefaultAgentId as fetchDefaultAgentId } from './lib/setup';
 import { initDefaultAgent } from './lib/agent';
@@ -401,13 +400,10 @@ function App({ initialProjectPath }: AppProps) {
 
   if (view === 'loading') {
     return (
-      <>
-        <div className="app loading">
-          <img src="/ship_studio_full_noshadow.svg" alt="Ship Studio" className="app-logo" />
-          <div className="spinner" />
-        </div>
-        <BugReportButton />
-      </>
+      <div className="app loading">
+        <img src="/ship_studio_full_noshadow.svg" alt="Ship Studio" className="app-logo" />
+        <div className="spinner" />
+      </div>
     );
   }
 
@@ -424,13 +420,10 @@ function App({ initialProjectPath }: AppProps) {
     };
 
     return (
-      <>
-        <div className="app">
-          <UpdateBanner />
-          <OnboardingScreen onComplete={() => void handleOnboardingComplete()} />
-        </div>
-        <BugReportButton />
-      </>
+      <div className="app">
+        <UpdateBanner />
+        <OnboardingScreen onComplete={() => void handleOnboardingComplete()} />
+      </div>
     );
   }
 
@@ -468,13 +461,10 @@ function App({ initialProjectPath }: AppProps) {
 
   if (view === 'project-loading') {
     return (
-      <>
-        <div className="app loading">
-          <div className="spinner" />
-          <p>Opening {currentProject?.name}...</p>
-        </div>
-        <BugReportButton />
-      </>
+      <div className="app loading">
+        <div className="spinner" />
+        <p>Opening {currentProject?.name}...</p>
+      </div>
     );
   }
 

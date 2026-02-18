@@ -28,7 +28,9 @@ import {
   HistoryIcon,
   DollarIcon,
   PuzzleIcon,
+  BugIcon,
 } from './icons';
+import { BugReportModal } from './BugReportButton';
 import { logger } from '../lib/logger';
 import { trackEvent } from '../lib/analytics';
 import type { IntegrationState } from '../hooks/useIntegrationStatus';
@@ -127,6 +129,9 @@ export function WorkspaceHeader({
   pluginActions,
   pluginTheme,
 }: WorkspaceHeaderProps) {
+  // Bug report modal state
+  const [isBugReportOpen, setIsBugReportOpen] = useState(false);
+
   // IDE dropdown state (internal to header)
   const [showIdeDropdown, setShowIdeDropdown] = useState(false);
   const [ideAvailability, setIdeAvailability] = useState<{ vscode: boolean; cursor: boolean }>({
@@ -255,6 +260,14 @@ export function WorkspaceHeader({
         >
           <HistoryIcon size={14} />
         </button>
+        <button
+          className="toolbar-icon-btn"
+          onClick={() => setIsBugReportOpen(true)}
+          title="Report a Bug"
+          data-education-id="bug-report-button"
+        >
+          <BugIcon size={14} />
+        </button>
         <span data-education-id="github-button">
           <GitHubButton
             githubState={integrations.github}
@@ -290,6 +303,7 @@ export function WorkspaceHeader({
           theme={pluginTheme}
         />
       </div>
+      <BugReportModal isOpen={isBugReportOpen} onClose={() => setIsBugReportOpen(false)} />
     </header>
   );
 }

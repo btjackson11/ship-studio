@@ -20,7 +20,6 @@ import { PublishBranchDropdown } from './PublishBranchDropdown';
 import { BranchIndicator } from './BranchIndicator';
 import { BranchesTab } from './BranchesTab';
 import { PullRequestsTab } from './PullRequestsTab';
-import { BugReportButton } from './BugReportButton';
 import { CompactActionsRow } from './CompactMode';
 import { MainBranchBanner } from './MainBranchBanner';
 import { BrowserDropdown } from './BrowserDropdown';
@@ -1161,8 +1160,6 @@ export function WorkspaceView({
           onPluginTerminalExit={handlePluginTerminalExit}
         />
       </div>
-
-      <BugReportButton />
     </>
   );
 }
