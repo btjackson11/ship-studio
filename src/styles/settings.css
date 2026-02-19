@@ -88,8 +88,8 @@
 }
 
 .settings-toggle.on .settings-toggle-track {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--action);
+  border-color: var(--action);
 }
 
 .settings-toggle-thumb {
