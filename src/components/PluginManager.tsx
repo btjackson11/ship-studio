@@ -7,8 +7,8 @@
  * @module components/PluginManager
  */
 
-import { useEffect, useState, useCallback } from 'react';
-import { CloseIcon } from './icons';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { CloseIcon, SearchIcon } from './icons';
 import { trackEvent, trackError } from '../lib/analytics';
 import { logger } from '../lib/logger';
 import {
@@ -61,6 +61,30 @@ export function PluginManager({
   const [isLinkingDev, setIsLinkingDev] = useState(false);
   const [reloadingId, setReloadingId] = useState<string | null>(null);
   const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounce search input
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 150);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [searchQuery]);
+
+  // Clear search when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchQuery('');
+      setDebouncedQuery('');
+    }
+  }, [isOpen]);
 
   // Handle Escape key
   useEffect(() => {
@@ -322,6 +346,30 @@ export function PluginManager({
 
   const installedIds = new Set(plugins.map((p) => p.manifest.id));
 
+  // Filter plugins based on search query
+  const filteredPlugins = debouncedQuery
+    ? plugins.filter((p) => {
+        const q = debouncedQuery.toLowerCase();
+        return (
+          p.manifest.name.toLowerCase().includes(q) ||
+          p.manifest.description.toLowerCase().includes(q) ||
+          (p.manifest.author && p.manifest.author.toLowerCase().includes(q))
+        );
+      })
+    : plugins;
+
+  const filteredRegistry = debouncedQuery
+    ? registry.filter((entry) => {
+        const q = debouncedQuery.toLowerCase();
+        return (
+          entry.name.toLowerCase().includes(q) ||
+          entry.description.toLowerCase().includes(q) ||
+          entry.author.toLowerCase().includes(q) ||
+          entry.category.toLowerCase().includes(q)
+        );
+      })
+    : registry;
+
   if (!isOpen) return null;
 
   return (
@@ -349,6 +397,23 @@ export function PluginManager({
           </button>
         </div>
 
+        {projectPath && (
+          <div className="plugins-search">
+            <SearchIcon size={12} />
+            <input
+              type="text"
+              className="plugins-search-input"
+              placeholder="Filter plugins..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+            />
+          </div>
+        )}
+
         <div className="plugins-modal-body">
           {!projectPath && (
             <div className="plugins-empty">Open a project to manage its plugins.</div>
@@ -373,8 +438,12 @@ export function PluginManager({
                 </div>
               )}
 
+              {!isLoading && plugins.length > 0 && filteredPlugins.length === 0 && (
+                <div className="plugins-empty">No matching plugins</div>
+              )}
+
               <div className="plugins-list">
-                {plugins.map((plugin) => (
+                {filteredPlugins.map((plugin) => (
                   <div key={plugin.manifest.id} className="plugin-row">
                     <div className="plugin-info">
                       <div className="plugin-name">
@@ -521,8 +590,12 @@ export function PluginManager({
                 </div>
               )}
 
+              {!isLoadingRegistry && registry.length > 0 && filteredRegistry.length === 0 && (
+                <div className="plugins-empty">No matching plugins</div>
+              )}
+
               <div className="plugins-list">
-                {registry.map((entry) => {
+                {filteredRegistry.map((entry) => {
                   const isInstalled = installedIds.has(entry.id);
                   const isThisInstalling = installingId === entry.id;
 

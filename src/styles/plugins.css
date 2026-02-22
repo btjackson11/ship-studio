@@ -80,6 +80,47 @@
   color: var(--text-primary);
 }
 
+/* Search */
+.plugins-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 30px;
+  min-height: 30px;
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  margin: 0 24px 12px;
+  transition: border-color 0.15s;
+}
+
+.plugins-search:focus-within {
+  border-color: var(--text-muted);
+}
+
+.plugins-search svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.plugins-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 11px;
+  color: var(--text-primary);
+  padding: 0;
+  min-width: 0;
+}
+
+.plugins-search-input::placeholder {
+  color: var(--text-muted);
+}
+
 /* Body */
 .plugins-modal-body {
   flex: 1;
