@@ -265,7 +265,8 @@ export function usePreviewConnection({
           url: devServerUrl,
         });
         if (retryCount < SERVER_MAX_RETRIES) {
-          setTimeout(() => setRetryCount((c) => c + 1), 1000);
+          const delay = Math.min(1000 * Math.pow(1.5, retryCount), 5000);
+          setTimeout(() => setRetryCount((c) => c + 1), delay);
         } else {
           setIsLoading(false);
           setHasError(true);
