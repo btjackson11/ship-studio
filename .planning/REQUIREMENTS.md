@@ -12,12 +12,12 @@
 
 ### Project Settings
 
-- [ ] **SETS-01**: Clicking the settings cog opens a Project Settings modal dialog
+- [x] **SETS-01**: Clicking the settings cog opens a Project Settings modal dialog
 - [x] **SETS-02**: Project Settings modal contains a Dev Server Port input field
 - [x] **SETS-03**: Dev server port defaults to 3000 when no value is configured
 - [x] **SETS-04**: Port setting is persisted in `.shipstudio/project.json` per-project
-- [ ] **SETS-05**: Changing port restarts the dev server on the new port
-- [ ] **SETS-06**: Port change only affects Ship Studio's dev server, not project source code
+- [x] **SETS-05**: Changing port restarts the dev server on the new port
+- [x] **SETS-06**: Port change only affects Ship Studio's dev server, not project source code
 
 ## v2 Requirements
 
@@ -38,12 +38,12 @@
 |-------------|-------|--------|
 | TOOL-01 | Phase 1 | Complete |
 | TOOL-02 | Phase 1 | Complete |
-| SETS-01 | Phase 2 | Pending |
+| SETS-01 | Phase 2 | Complete |
 | SETS-02 | Phase 2 | Complete |
 | SETS-03 | Phase 2 | Complete |
 | SETS-04 | Phase 2 | Complete |
-| SETS-05 | Phase 2 | Pending |
-| SETS-06 | Phase 2 | Pending |
+| SETS-05 | Phase 2 | Complete |
+| SETS-06 | Phase 2 | Complete |
 
 **Coverage:**
 - v1 requirements: 8 total
