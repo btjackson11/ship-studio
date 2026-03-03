@@ -277,7 +277,10 @@
   background: var(--bg-tertiary);
   color: var(--text-muted);
   border: 2px solid var(--border);
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
   position: relative;
   z-index: 1;
 }
@@ -393,7 +396,10 @@
   background: var(--bg-secondary);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .wizard-nav-back:hover {
@@ -410,7 +416,10 @@
   background: #7fe89a;
   color: #1e1e1e;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .wizard-nav-next:hover:not(:disabled) {
@@ -435,7 +444,10 @@
   border-radius: 12px;
   padding: 16px;
   background: var(--bg-secondary);
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .wizard-agent-card.ready {

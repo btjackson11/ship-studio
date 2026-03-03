@@ -104,23 +104,30 @@ export function usePreviewResize({ iframeWrapperRef }: UsePreviewResizeParams) {
       const startX = e.clientX;
       const startWidth = iframeWrapperRef.current?.offsetWidth || 0;
 
+      let rafId: number | null = null;
       const handleMouseMove = (e: MouseEvent) => {
         if (!viewportRef.current) return;
+        if (rafId !== null) return;
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          if (!viewportRef.current) return;
 
-        const deltaX = e.clientX - startX;
-        // Multiply by 2 because preview is centered (handle moves half of width change)
-        const newWidth = startWidth + deltaX * 2;
-        const maxWidth = viewportRef.current.offsetWidth - 12; // Leave space for handle
+          const deltaX = e.clientX - startX;
+          // Multiply by 2 because preview is centered (handle moves half of width change)
+          const newWidth = startWidth + deltaX * 2;
+          const maxWidth = viewportRef.current.offsetWidth - 12; // Leave space for handle
 
-        if (newWidth >= maxWidth - 10) {
-          // Snap to full width (desktop)
-          setCustomWidth(null);
-        } else {
-          setCustomWidth(Math.max(320, Math.min(newWidth, maxWidth)));
-        }
+          if (newWidth >= maxWidth - 10) {
+            // Snap to full width (desktop)
+            setCustomWidth(null);
+          } else {
+            setCustomWidth(Math.max(320, Math.min(newWidth, maxWidth)));
+          }
+        });
       };
 
       const handleMouseUp = () => {
+        if (rafId !== null) cancelAnimationFrame(rafId);
         setIsResizing(false);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';

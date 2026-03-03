@@ -189,13 +189,21 @@ export function usePreviewCapture({
     setIsSelecting(true);
   }, []);
 
+  const cropRafRef = useRef<number | null>(null);
   const handleCropMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!isSelecting || !cropOverlayRef.current) return;
-      const rect = cropOverlayRef.current.getBoundingClientRect();
-      const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-      const y = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
-      setSelectionEnd({ x, y });
+      if (cropRafRef.current !== null) return;
+      const clientX = e.clientX;
+      const clientY = e.clientY;
+      cropRafRef.current = requestAnimationFrame(() => {
+        cropRafRef.current = null;
+        if (!cropOverlayRef.current) return;
+        const rect = cropOverlayRef.current.getBoundingClientRect();
+        const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+        const y = Math.max(0, Math.min(clientY - rect.top, rect.height));
+        setSelectionEnd({ x, y });
+      });
     },
     [isSelecting]
   );

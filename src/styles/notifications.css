@@ -97,7 +97,10 @@
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: 11px;
-  transition: all 0.2s;
+  transition:
+    background-color 0.2s,
+    color 0.2s,
+    border-color 0.2s;
 }
 
 .notification-toggle-slider::before {
@@ -109,7 +112,10 @@
   top: 2px;
   background: var(--text-secondary);
   border-radius: 50%;
-  transition: all 0.2s;
+  transition:
+    background-color 0.2s,
+    color 0.2s,
+    border-color 0.2s;
 }
 
 .notification-toggle input:checked + .notification-toggle-slider {
@@ -143,7 +149,10 @@
   border-radius: 6px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .notification-sound-option:hover {
@@ -179,7 +188,10 @@
   border-radius: 6px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   width: fit-content;
 }
 
@@ -203,7 +215,10 @@
   font-size: 13px;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .notification-settings-cancel {

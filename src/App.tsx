@@ -922,10 +922,17 @@ function App({ initialProjectPath }: AppProps) {
     );
   }
 
-  // Workspace view
+  // Workspace view (guard against null during back-navigation transition)
+  if (!currentProject) {
+    return (
+      <div className="app loading">
+        <div className="spinner" />
+      </div>
+    );
+  }
   return (
     <WorkspaceView
-      currentProject={currentProject!}
+      currentProject={currentProject}
       previewRef={previewRef}
       terminal={terminalProps}
       devServer={devServerProps}

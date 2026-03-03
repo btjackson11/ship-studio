@@ -15,7 +15,10 @@
   pointer-events: none;
   border: 1px solid #3b82f6;
   border-radius: 4px;
-  transition: all 0.15s ease-out;
+  transition:
+    background-color 0.15s ease-out,
+    color 0.15s ease-out,
+    border-color 0.15s ease-out;
   z-index: 10001;
 }
 

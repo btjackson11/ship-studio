@@ -46,6 +46,11 @@ export function useDevServer() {
   const healthThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const healthPendingRef = useRef(false);
 
+  // Suppression flag: when true, output handlers skip state updates.
+  // This prevents leaked PTY onData listeners from causing infinite re-renders
+  // after the dev server is stopped (pty.kill() doesn't remove event listeners).
+  const outputSuppressedRef = useRef(false);
+
   // Handle health check output
   const handleHealthOutput = useCallback((output: string) => {
     healthOutputRef.current += output;
@@ -69,6 +74,9 @@ export function useDevServer() {
   // Create the output callback for dev server
   const createOutputHandler = useCallback(() => {
     return (data: string) => {
+      // Skip state updates if server has been stopped (prevents leaked PTY listeners
+      // from causing infinite re-renders after back-navigation)
+      if (outputSuppressedRef.current) return;
       devServerOutputRef.current += data;
       if (devServerOutputRef.current.length > 100000) {
         devServerOutputRef.current = devServerOutputRef.current.slice(-100000);
@@ -79,7 +87,9 @@ export function useDevServer() {
           devServerThrottleRef.current = null;
           if (devServerPendingRef.current) {
             devServerPendingRef.current = false;
-            setDevServerOutputVersion((v) => v + 1);
+            if (!outputSuppressedRef.current) {
+              setDevServerOutputVersion((v) => v + 1);
+            }
           }
         }, 300);
       } else {
@@ -99,6 +109,8 @@ export function useDevServer() {
   // Detect project type and start appropriate server
   const startServerForProject = useCallback(
     async (projectPath: string, projectName: string, port: number, windowLabel: string) => {
+      // Re-enable output handling for the new server
+      outputSuppressedRef.current = false;
       let detectedType: ProjectType = 'unknown';
       try {
         detectedType = await detectProjectType(projectPath);
@@ -189,6 +201,22 @@ export function useDevServer() {
 
   // Stop dev server or static server
   const stopServer = useCallback(async () => {
+    // Suppress output handler BEFORE stopping — prevents leaked PTY onData
+    // listeners from calling setDevServerOutputVersion after stop
+    outputSuppressedRef.current = true;
+
+    // Clear any pending throttle timers
+    if (devServerThrottleRef.current) {
+      clearTimeout(devServerThrottleRef.current);
+      devServerThrottleRef.current = null;
+    }
+    devServerPendingRef.current = false;
+    if (healthThrottleRef.current) {
+      clearTimeout(healthThrottleRef.current);
+      healthThrottleRef.current = null;
+    }
+    healthPendingRef.current = false;
+
     if (devServerRef.current) {
       await devServerRef.current.stop();
       devServerRef.current = null;

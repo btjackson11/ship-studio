@@ -39,7 +39,10 @@
   font-family: monospace;
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .page-switcher-btn:hover {
@@ -112,7 +115,10 @@
   font-size: 13px;
   text-align: left;
   cursor: pointer;
-  transition: all 0.1s;
+  transition:
+    background-color 0.1s,
+    color 0.1s,
+    border-color 0.1s;
 }
 
 .page-item:hover {
@@ -176,7 +182,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .breakpoint-btn svg {

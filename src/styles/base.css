@@ -135,7 +135,11 @@ button {
   border-radius: 6px;
   font-size: 14px;
   padding: 10px 16px;
-  transition: all 0.2s;
+  transition:
+    background-color 0.2s,
+    color 0.2s,
+    border-color 0.2s,
+    opacity 0.2s;
   background: var(--bg-tertiary);
   color: var(--text-primary);
 }
@@ -188,7 +192,10 @@ button:hover {
   color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .toolbar-icon-btn:hover {

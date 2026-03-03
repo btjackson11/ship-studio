@@ -63,7 +63,10 @@
   border: 1px dashed var(--border);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .mcp-tab:hover {
@@ -151,7 +154,10 @@
   border: 1px dashed var(--border);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .mcp-filter-btn:hover {
@@ -277,7 +283,10 @@
   border: 1px dashed var(--border);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   flex-shrink: 0;
 }
 
@@ -350,7 +359,10 @@
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .mcp-add-btn:hover {
@@ -388,7 +400,10 @@
   border: 1px dashed var(--border);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .mcp-scope-btn:hover {

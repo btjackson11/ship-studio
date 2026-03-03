@@ -12,7 +12,10 @@
   border-radius: 6px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   font-size: 12px;
   font-weight: 500;
   flex-shrink: 0;
@@ -76,7 +79,10 @@
   color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -126,7 +132,10 @@
   border-radius: 4px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .health-rerun:hover {
@@ -148,7 +157,10 @@
   color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -180,7 +192,10 @@
   font-weight: 500;
   font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   flex-shrink: 0;
   white-space: nowrap;
 }
@@ -219,7 +234,10 @@
   border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   flex-shrink: 0;
 }
 
@@ -246,7 +264,10 @@
   border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   flex-shrink: 0;
 }
 
@@ -422,7 +443,10 @@
   border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .health-modal-close:hover {
@@ -483,7 +507,10 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .health-modal-btn.secondary {
@@ -537,7 +564,10 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   flex-shrink: 0;
   white-space: nowrap;
 }
@@ -615,7 +645,10 @@
   border-radius: 4px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .health-suggestion-copy:hover {

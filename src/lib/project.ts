@@ -442,8 +442,12 @@ export async function startDevServer(
     });
   });
 
+  // Store the disposable so we can remove the onData listener on stop.
+  // Without this, killed PTY processes continue flooding JS with IPC messages,
+  // causing 100% CPU even after the dev server is "stopped".
+  let dataDisposable: { dispose(): void } | null = null;
   if (onOutput) {
-    pty.onData((data) => {
+    dataDisposable = pty.onData((data) => {
       // tauri-pty passes data as Uint8Array or array-like object
       let text: string;
       if (typeof data === 'string') {
@@ -462,8 +466,16 @@ export async function startDevServer(
     ptyId,
     stop: async () => {
       try {
+        // Dispose the onData listener FIRST to stop IPC message flood
+        dataDisposable?.dispose();
         // Kill the PTY process
         pty.kill();
+        // Invalidate PID to break tauri-pty's infinite readData() loop.
+        // tauri-pty runs `for(;;) { yield invoke('plugin:pty|read', { pid }) }` —
+        // after kill(), this loop continues generating microtasks (100% CPU).
+        // Setting pid to undefined makes the next invoke fail, breaking the loop.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+        (pty as any).pid = undefined;
         // Small delay to let the PTY cleanup complete before unregistering
         await new Promise((resolve) => setTimeout(resolve, 100));
         // Unregister from backend

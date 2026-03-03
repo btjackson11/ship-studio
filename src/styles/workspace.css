@@ -166,7 +166,10 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   outline: none;
 }
 
@@ -236,7 +239,10 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   outline: none;
   margin-left: auto;
 }
@@ -264,7 +270,10 @@
   border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   outline: none;
   margin-left: 8px;
   flex-shrink: 0;
@@ -305,7 +314,10 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   outline: none;
   white-space: nowrap;
 }
@@ -332,7 +344,10 @@
   border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   outline: none;
   flex-shrink: 0;
 }
@@ -363,7 +378,10 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   outline: none;
   white-space: nowrap;
   flex-shrink: 0;
@@ -421,7 +439,10 @@
   border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .terminal-tab:hover {
@@ -460,7 +481,10 @@
   border-radius: 4px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.1s;
+  transition:
+    background-color 0.1s,
+    color 0.1s,
+    border-color 0.1s;
 }
 
 .terminal-tab-chevron:hover {
@@ -541,7 +565,10 @@
   border-radius: 4px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .terminal-tab-add:hover {
@@ -836,7 +863,10 @@
   border-radius: 4px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   -webkit-app-region: no-drag;
 }
 
@@ -918,7 +948,10 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .compact-back-btn:hover {

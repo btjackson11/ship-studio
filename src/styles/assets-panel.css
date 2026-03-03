@@ -121,7 +121,10 @@
   font-size: 13px;
   cursor: pointer;
   border-radius: 4px;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .assets-breadcrumb-btn:hover {
@@ -152,7 +155,10 @@
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .assets-toolbar-btn:hover:not(:disabled) {
@@ -187,7 +193,10 @@
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .assets-view-btn:hover {
@@ -496,7 +505,10 @@
   background: var(--bg-secondary);
   border-radius: 8px;
   cursor: default;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   position: relative;
 }
 

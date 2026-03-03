@@ -40,14 +40,21 @@ export function CodeTab({ projectPath, onToast, onSendToAgent }: CodeTabProps) {
     e.preventDefault();
     isDragging.current = true;
 
+    let rafId: number | null = null;
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging.current || !containerRef.current) return;
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const newWidth = e.clientX - containerRect.left;
-      setSidebarWidth(Math.max(150, Math.min(newWidth, 500)));
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        if (!isDragging.current || !containerRef.current) return;
+        const containerRect = containerRef.current.getBoundingClientRect();
+        const newWidth = e.clientX - containerRect.left;
+        setSidebarWidth(Math.max(150, Math.min(newWidth, 500)));
+      });
     };
 
     const handleMouseUp = () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
       isDragging.current = false;
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);

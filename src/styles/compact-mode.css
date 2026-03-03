@@ -129,7 +129,10 @@
   color: #9d9d9d;
   font-size: 11px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .compact-action-btn svg {
@@ -287,7 +290,10 @@
   border-radius: 4px;
   color: #6d6d6d;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .compact-control-btn svg {

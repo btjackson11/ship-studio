@@ -35,7 +35,10 @@
       "Bash(git init:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(npx vitest:*)"
+      "Bash(npx vitest:*)",
+      "Bash(find src/styles -name '*.css' -exec sed -i '' 's/transition: all 0\\\\.1s;/transition: background-color 0.1s, color 0.1s, border-color 0.1s;/g' {} +)",
+      "Bash(find src/styles -name '*.css' -exec sed -i '' 's/transition: all 0\\\\.2s;/transition: background-color 0.2s, color 0.2s, border-color 0.2s;/g' {} +)",
+      "Bash(find src/styles -name '*.css' -exec sed -i '' 's/transition: all 0\\\\.2s ease;/transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;/g' {} +)"
     ]
   }
 }

@@ -16,7 +16,10 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .publish-button:hover {
@@ -124,7 +127,10 @@
   cursor: pointer;
   position: relative;
   flex-shrink: 0;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .publish-row input[type='checkbox']:checked {
@@ -182,7 +188,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .publish-row-link:hover {
@@ -328,7 +337,10 @@
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .publish-close:hover {
@@ -345,7 +357,10 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .publish-submit:hover {
@@ -471,7 +486,10 @@
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .publish-url-btn:hover {
@@ -492,7 +510,10 @@
   color: var(--text-primary);
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   font-family: monospace;
 }
 
@@ -532,7 +553,10 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .publish-done:hover {
@@ -589,7 +613,10 @@
   color: var(--text-primary);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .publish-reset-options button:hover:not(:disabled) {
@@ -638,7 +665,10 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   margin-bottom: 8px;
   text-align: left;
 }
@@ -720,7 +750,10 @@
   color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .publish-link-button:hover {
@@ -823,7 +856,10 @@
   font-size: 12px;
   cursor: pointer;
   border-radius: 6px;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .publish-quick-link:hover {

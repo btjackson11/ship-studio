@@ -89,7 +89,10 @@
   border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   flex-shrink: 0;
 }
 
@@ -266,7 +269,10 @@
   color: var(--text-primary);
   cursor: pointer;
   font-size: 13px;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .diff-error button:hover {

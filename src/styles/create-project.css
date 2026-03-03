@@ -86,7 +86,10 @@
   color: var(--text-muted);
   cursor: pointer;
   border-radius: 6px;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   margin: -4px -4px 0 0;
 }
 
@@ -353,7 +356,10 @@
   color: var(--text-muted);
   cursor: pointer;
   text-align: center;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .template-default-toggle:hover {
@@ -411,7 +417,10 @@
   border: 2px dashed var(--border);
   border-radius: 10px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   margin-bottom: 0;
 }
 
@@ -479,7 +488,10 @@
   color: var(--text-muted);
   cursor: pointer;
   border-radius: 4px;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   flex-shrink: 0;
 }
 

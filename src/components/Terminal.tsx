@@ -65,6 +65,9 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const ptyRef = useRef<IPty | null>(null);
+  // Track IDisposable handles from pty.onData/onExit so we can remove listeners on cleanup.
+  // Without this, killed PTY processes continue flooding Tauri IPC → microtasks → 100% CPU.
+  const ptyDisposablesRef = useRef<Array<{ dispose(): void }>>([]);
   const [isReady, setIsReady] = useState(false);
   const [isFocused, setIsFocused] = useState(false); // Start unfocused to show overlay until user clicks
 
@@ -78,9 +81,25 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   }, [onExit, onStatusChange]);
 
   const cleanup = useCallback(() => {
+    // Dispose PTY event listeners FIRST to stop IPC message flood
+    for (const d of ptyDisposablesRef.current) {
+      try {
+        d.dispose();
+      } catch {
+        /* ignore */
+      }
+    }
+    ptyDisposablesRef.current = [];
+
     if (ptyRef.current) {
       try {
         ptyRef.current.kill();
+        // Invalidate PID to break tauri-pty's infinite readData() loop.
+        // tauri-pty runs `for(;;) { yield invoke('plugin:pty|read', { pid }) }` —
+        // after kill(), this loop continues generating microtasks (100% CPU).
+        // Setting pid to undefined makes the next invoke fail, breaking the loop.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+        (ptyRef.current as any).pid = undefined;
       } catch {
         // Ignore - PTY may already be dead
       }
@@ -349,17 +368,20 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         // Check again after async operation
         if (!mounted) {
           pty.kill();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+          (pty as any).pid = undefined;
           return;
         }
 
         ptyRef.current = pty;
 
         // Handle PTY output -> terminal
+        // Store disposables so cleanup() can remove IPC listeners and prevent CPU leak.
         // For agents without title-based detection, add idle-detection:
         // when output stops flowing for 1.5s after "thinking" state, transition to "waiting".
         if (!agent.supportsStatusDetection) {
           let idleTimer: ReturnType<typeof setTimeout> | null = null;
-          pty.onData((data) => {
+          const dataDisposable = pty.onData((data) => {
             terminalRef.current?.write(data);
             if (lastStatusRef.current === 'thinking') {
               if (idleTimer) clearTimeout(idleTimer);
@@ -371,17 +393,20 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
               }, 1500);
             }
           });
+          ptyDisposablesRef.current.push(dataDisposable);
         } else {
-          pty.onData((data) => {
+          const dataDisposable = pty.onData((data) => {
             terminalRef.current?.write(data);
           });
+          ptyDisposablesRef.current.push(dataDisposable);
         }
 
         // Handle PTY exit
-        pty.onExit(({ exitCode }) => {
+        const exitDisposable = pty.onExit(({ exitCode }) => {
           terminalRef.current?.write('\r\n[Process exited]\r\n');
           onExitRef.current?.(exitCode);
         });
+        ptyDisposablesRef.current.push(exitDisposable);
 
         // Handle terminal input -> PTY
         term.onData((data) => {

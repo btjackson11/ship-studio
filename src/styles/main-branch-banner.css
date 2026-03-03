@@ -65,7 +65,10 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   white-space: nowrap;
 }
 
@@ -100,7 +103,10 @@
   border-radius: 3px;
   background: transparent;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .main-branch-banner-checkbox input[type='checkbox']:hover {
@@ -136,7 +142,10 @@
   color: #f59e0b;
   cursor: pointer;
   opacity: 0.6;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .main-branch-banner-close:hover {

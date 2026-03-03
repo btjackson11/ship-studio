@@ -82,22 +82,30 @@ export function SplitPane({
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
 
+      let rafId: number | null = null;
       const handleMouseMove = (e: MouseEvent) => {
         if (!containerRef.current) return;
+        // Throttle to one update per animation frame
+        if (rafId !== null) return;
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          if (!containerRef.current) return;
 
-        const rect = containerRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const percentage = (x / rect.width) * 100;
+          const rect = containerRef.current.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const percentage = (x / rect.width) * 100;
 
-        // Clamp to min/max
-        const clamped = Math.max(minLeft, Math.min(100 - minRight, percentage));
-        setSplit(clamped);
+          // Clamp to min/max
+          const clamped = Math.max(minLeft, Math.min(100 - minRight, percentage));
+          setSplit(clamped);
 
-        // Trigger resize event for terminals to recalculate
-        window.dispatchEvent(new Event('resize'));
+          // Trigger resize event for terminals to recalculate
+          window.dispatchEvent(new Event('resize'));
+        });
       };
 
       const handleMouseUp = () => {
+        if (rafId !== null) cancelAnimationFrame(rafId);
         setIsDragging(false);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';

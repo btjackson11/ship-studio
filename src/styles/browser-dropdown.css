@@ -47,7 +47,10 @@
   font-size: 13px;
   text-align: left;
   cursor: pointer;
-  transition: all 0.1s;
+  transition:
+    background-color 0.1s,
+    color 0.1s,
+    border-color 0.1s;
 }
 
 .browser-dropdown-inner button:hover {
