@@ -12,7 +12,7 @@
 
 import { useEffect, useRef } from 'react';
 import { SearchIcon, SettingsIcon, FolderPlusIcon } from './icons';
-import { trackSearch } from '../lib/analytics';
+import { trackEvent, trackSearch } from '../lib/analytics';
 
 interface DashboardHeaderProps {
   searchQuery: string;
@@ -75,7 +75,14 @@ export function DashboardHeader({
       </div>
       <div className="dashboard-header-actions">
         {onCreateFolder && (
-          <button className="btn-secondary btn-icon" onClick={onCreateFolder} title="New Folder">
+          <button
+            className="btn-secondary btn-icon"
+            onClick={() => {
+              void trackEvent('new_folder_clicked', { $screen_name: 'Dashboard' });
+              onCreateFolder();
+            }}
+            title="New Folder"
+          >
             <FolderPlusIcon size={14} />
           </button>
         )}
@@ -83,6 +90,7 @@ export function DashboardHeader({
           <button
             className="btn-secondary"
             onClick={() => {
+              void trackEvent('import_button_clicked', { $screen_name: 'Dashboard' });
               if (isGitHubAuthenticated) {
                 onImportProject();
               } else if (onGitHubConnectForImport) {
@@ -94,11 +102,24 @@ export function DashboardHeader({
             Import
           </button>
         )}
-        <button className="btn-primary" onClick={onCreateProject}>
+        <button
+          className="btn-primary"
+          onClick={() => {
+            void trackEvent('new_project_clicked', { $screen_name: 'Dashboard' });
+            onCreateProject();
+          }}
+        >
           + New Project
         </button>
         {onOpenSettings && (
-          <button className="dashboard-settings-btn" onClick={onOpenSettings} title="Settings">
+          <button
+            className="dashboard-settings-btn"
+            onClick={() => {
+              void trackEvent('settings_opened', { $screen_name: 'Dashboard' });
+              onOpenSettings();
+            }}
+            title="Settings"
+          >
             <SettingsIcon size={14} />
           </button>
         )}

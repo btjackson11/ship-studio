@@ -149,6 +149,7 @@ export function ConflictResolutionModal({
     setIsApplying(true);
     try {
       await abortMerge(projectPath);
+      void trackEvent('merge_aborted', { $screen_name: 'Conflict Resolution' });
       onToast?.('Merge aborted', 'success');
       onClose();
     } catch (e) {

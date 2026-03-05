@@ -25,6 +25,7 @@ import {
 } from '../lib/project';
 import { unregisterExternalProject } from '../lib/external-projects';
 import { logger } from '../lib/logger';
+import { trackEvent, trackError } from '../lib/analytics';
 import {
   FolderInfo,
   Folder,
@@ -272,9 +273,11 @@ export function ProjectList({
     setDeleting(true);
     try {
       await deleteProject(project.path);
+      void trackEvent('project_deleted', { $screen_name: 'Dashboard' });
       setDeleteConfirm(null);
       await loadAll();
     } catch (error) {
+      trackError('project_delete', error, 'Dashboard');
       logger.error('Failed to delete project', {
         error: error instanceof Error ? error.message : String(error),
       });
@@ -303,6 +306,7 @@ export function ProjectList({
     try {
       const result = await exportProjectAsTemplate(projectPath);
       if (result) {
+        void trackEvent('project_exported_as_template', { $screen_name: 'Dashboard' });
         alert(`Template exported to:\n${result}`);
       }
       // If result is null, user cancelled the dialog - no action needed
@@ -329,6 +333,7 @@ export function ProjectList({
   const handleOpenInNewWindow = async (project: DashboardProject) => {
     try {
       await openProjectInNewWindow(project.path, project.name);
+      void trackEvent('project_opened_in_new_window', { $screen_name: 'Dashboard' });
     } catch (error) {
       logger.error('[ProjectList] Failed to open in new window', {
         error,
@@ -341,6 +346,7 @@ export function ProjectList({
 
   const handleCreateFolder = async (name: string) => {
     await createFolder(name);
+    void trackEvent('folder_created', { $screen_name: 'Dashboard' });
     await loadFolders();
   };
 
@@ -354,6 +360,7 @@ export function ProjectList({
     setDeletingFolder(true);
     try {
       await deleteFolder(folder.id);
+      void trackEvent('folder_deleted', { $screen_name: 'Dashboard' });
       setDeleteFolderConfirm(null);
       await loadAll();
     } catch (error) {
@@ -369,6 +376,7 @@ export function ProjectList({
   const handleMoveProject = async (folderId: string | null) => {
     if (!moveProject) return;
     await moveProjectToFolder(moveProject.path, folderId);
+    void trackEvent('project_moved_to_folder', { $screen_name: 'Dashboard' });
     setMoveProject(null);
     setMoveProjectFolderId(null);
     await loadAll();

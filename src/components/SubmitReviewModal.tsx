@@ -7,7 +7,7 @@
  * @module components/SubmitReviewModal
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createPullRequest } from '../lib/branches';
 import { generatePRDescription } from '../lib/ai';
 import { commitChanges } from '../lib/git';
@@ -47,6 +47,11 @@ export function SubmitReviewModal({
   const [needsCommit, setNeedsCommit] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usedAiGeneration, setUsedAiGeneration] = useState(false);
+
+  // Track modal open
+  useEffect(() => {
+    void trackEvent('submit_review_opened', { branch: branchName, $screen_name: 'Workspace' });
+  }, [branchName]);
 
   const handleGenerate = async () => {
     setIsGenerating(true);

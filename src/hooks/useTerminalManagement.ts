@@ -106,6 +106,10 @@ export function useTerminalManagement(): UseTerminalManagementReturn {
     const newTabId = ++terminalTabCounterRef.current;
     setTerminalTabs((prev) => [...prev, { id: newTabId, agentId: getDefaultAgentId() }]);
     setActiveTerminalTab(newTabId);
+    void trackEvent('terminal_tab_added', {
+      tab_count: terminalTabs.length + 1,
+      $screen_name: 'Workspace',
+    });
   }, [terminalTabs.length]);
 
   const closeTerminalTab = useCallback(
@@ -131,6 +135,7 @@ export function useTerminalManagement(): UseTerminalManagementReturn {
       });
       // Clean up the ref
       terminalRefsMap.current.delete(tabId);
+      void trackEvent('terminal_tab_closed', { $screen_name: 'Workspace' });
     },
     [terminalTabs, activeTerminalTab]
   );

@@ -21,6 +21,7 @@ import {
 import { getChangedFiles, ChangedFile } from '../lib/git';
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from '../lib/logger';
+import { trackEvent } from '../lib/analytics';
 import type { PreviewHandle } from '../components/Preview';
 import type { CodeHealthPanelRef } from '../components/CodeHealthPanel';
 import type { Project } from '../lib/project';
@@ -87,6 +88,9 @@ export function useBranchManagement({
   const currentBranchRef = useRef(currentBranch);
   currentBranchRef.current = currentBranch;
 
+  // Track previous hasChanges state to detect external pushes (agent/CLI)
+  const hadChangesRef = useRef(false);
+
   // Track branch-switch timeouts so they can be cancelled on unmount or re-switch
   const branchSwitchTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -100,14 +104,30 @@ export function useBranchManagement({
           getChangedFiles(projectPath).catch(() => []),
         ]);
 
-        // Update branch if changed (e.g., user switched via CLI)
+        // Update branch if changed (e.g., user switched via CLI/agent)
         if (branch && branch !== currentBranchRef.current) {
           setCurrentBranch(branch);
+          void trackEvent('branch_switched', {
+            source: 'external',
+            from_branch: currentBranchRef.current,
+            to_branch: branch,
+            $screen_name: 'Workspace',
+          });
           // Refresh full branch list when branch changes
           void listBranches(projectPath)
             .then(setBranches)
             .catch((err) => logger.warn('Failed to refresh branch list', { error: err }));
         }
+
+        // Detect external push: had changes before, now synced, same branch
+        if (hadChangesRef.current && !hasChanges && branch === currentBranchRef.current) {
+          void trackEvent('branch_published', {
+            source: 'external',
+            branch: branch,
+            $screen_name: 'Workspace',
+          });
+        }
+        hadChangesRef.current = hasChanges;
 
         setHasUncommittedChanges(hasChanges);
         setChangedFiles(files);

@@ -18,7 +18,7 @@ import {
   switchBranch,
 } from '../lib/branches';
 import { GitHubIcon, WarningIcon, BranchIcon } from './icons';
-import { trackError } from '../lib/analytics';
+import { trackEvent, trackError } from '../lib/analytics';
 
 interface PullRequestsTabProps {
   /** Project path for PR operations */
@@ -106,6 +106,11 @@ export function PullRequestsTab({
     setMergingPr(prNumber);
     try {
       await mergePullRequest(projectPath, prNumber);
+      void trackEvent('pr_merged', {
+        head_ref: headRef,
+        base_ref: baseRef,
+        $screen_name: 'Workspace',
+      });
       onToast?.('Pull request merged', 'success');
       await fetchPullRequests();
       onRefresh();
@@ -129,6 +134,10 @@ export function PullRequestsTab({
         onBranchSwitch?.(postMergeInfo.baseBranch);
         // Delete the merged branch
         await deleteBranch(projectPath, postMergeInfo.branchName, true);
+        void trackEvent('post_merge_cleanup', {
+          deleted_branch: postMergeInfo.branchName,
+          $screen_name: 'Workspace',
+        });
         onToast?.(
           `Switched to ${postMergeInfo.baseBranch} and deleted ${postMergeInfo.branchName}`,
           'success'
@@ -152,6 +161,7 @@ export function PullRequestsTab({
       await checkoutPullRequest(projectPath, prNumber);
       setCheckedOutHead(headRef);
       onBranchSwitch?.(headRef);
+      void trackEvent('pr_checked_out', { head_ref: headRef, $screen_name: 'Workspace' });
       onToast?.(`Checked out branch ${headRef}`, 'success');
     } catch (e) {
       trackError('pr_checkout', e, 'Workspace');
@@ -165,6 +175,7 @@ export function PullRequestsTab({
     setClosingPr(prNumber);
     try {
       await closePullRequest(projectPath, prNumber);
+      void trackEvent('pr_closed', { $screen_name: 'Workspace' });
       onToast?.('Pull request closed', 'success');
       await fetchPullRequests();
       onRefresh();

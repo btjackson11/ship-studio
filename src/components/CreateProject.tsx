@@ -12,6 +12,7 @@
  */
 
 import { useState, useRef } from 'react';
+import { trackEvent } from '../lib/analytics';
 import { UploadIcon } from './icons';
 import { useProjectCreation, TEMPLATES, STEPS, STATUS_MESSAGES } from '../hooks/useProjectCreation';
 import { useClickOutside } from '../hooks/useClickOutside';
@@ -187,6 +188,10 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
                     className={`template-select-option ${selectedTemplate?.id === template.id && !hasZipTemplate ? 'selected' : ''}`}
                     onClick={() => {
                       handleTemplateSelect(template);
+                      void trackEvent('template_selected', {
+                        template_id: template.id,
+                        $screen_name: 'Create Project',
+                      });
                       setDropdownOpen(false);
                       setSetAsDefaultChecked(false);
                     }}

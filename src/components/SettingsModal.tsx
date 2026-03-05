@@ -53,6 +53,10 @@ export function SettingsModal({ isOpen, onClose, onCalendarHiddenChange }: Setti
     const newVisible = !calendarVisible;
     setLocalCalendarVisible(newVisible);
     void setCalendarHidden(!newVisible);
+    void trackEvent('calendar_visibility_toggled', {
+      visible: newVisible,
+      $screen_name: 'Settings',
+    });
     onCalendarHiddenChange?.(!newVisible);
   }, [calendarVisible, onCalendarHiddenChange]);
 
