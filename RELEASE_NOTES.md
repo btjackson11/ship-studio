@@ -6,6 +6,11 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.4.14
+
+- **Fixed rapid project switching** - Clicking back then immediately opening another project no longer hangs
+- **Faster port cleanup** - Port detection on macOS is now significantly faster with timeout protection
+
 ## What's New in v0.4.13
 
 - **Fixed 100% CPU on back-navigation** - Resolved tauri-pty infinite read loop that caused permanent CPU spike when navigating from workspace back to projects
