@@ -6,6 +6,15 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.4.17
+
+- **External project support** — Projects outside ~/ShipStudio no longer show forbidden path errors
+- **Cmd+W closes tab** — Closes the active terminal tab instead of quitting the app
+- **Cmd+Q confirmation** — Shows a quit confirmation dialog before exiting
+- **Dashboard UI cleanup** — Settings and new folder moved to more logical locations
+- **Session resume fix** — Failed session resume now auto-starts a fresh Claude Code session
+
+
 ## What's New in v0.4.16
 
 - **Terminal session persistence** — Conversations resume when reopening projects
