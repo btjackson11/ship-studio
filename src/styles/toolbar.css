@@ -109,7 +109,6 @@
 .terminal-content {
   flex: 1;
   overflow: hidden;
-  padding-left: 12px;
   position: relative;
 }
 
