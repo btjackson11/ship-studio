@@ -76,9 +76,6 @@
   padding: 8px 10px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
-  -webkit-user-select: none;
-  user-select: none;
-  cursor: default;
 }
 
 .workspace-content {

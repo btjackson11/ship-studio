@@ -132,14 +132,13 @@ export function WorkspaceHeader({
   pluginActions,
   pluginTheme,
 }: WorkspaceHeaderProps) {
-  // Window dragging — start native drag on mousedown in empty header space
+  // Window dragging — only from the title bar (not the toolbar with plugins)
   const handleDrag = useCallback((e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button, a, input, select, [role="button"]')) return;
     e.preventDefault();
     void getCurrentWindow().startDragging();
   }, []);
 
-  // Double-click to toggle maximize (native title bar behavior)
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button, a, input, select, [role="button"]')) return;
     const win = getCurrentWindow();
@@ -211,11 +210,7 @@ export function WorkspaceHeader({
           {projectPath}
         </button>
       </div>
-      <header
-        className="workspace-header"
-        onMouseDown={handleDrag}
-        onDoubleClick={handleDoubleClick}
-      >
+      <header className="workspace-header">
         {/* Left side — utility buttons + plugin toolbar slots */}
         <div className="workspace-header-left">
           <button
