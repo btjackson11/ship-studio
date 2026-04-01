@@ -24,6 +24,16 @@ interface ChangelogEntry {
 // Keep ~15 most recent versions for the sidebar
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.4.21',
+    items: [
+      'Fixed terminal freeze when switching between tabs',
+      'Fixed double-typing bug where each keystroke appeared twice',
+      'New tabs now autofocus immediately — no need to click',
+      'Failed project imports now show the actual error instead of just an exit code',
+      'Built-in support panel for help and bug reports',
+    ],
+  },
+  {
     version: '0.4.20',
     items: [
       'Fixed terminal hanging and "no output" errors with multiple tabs',
