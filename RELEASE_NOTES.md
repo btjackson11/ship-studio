@@ -6,6 +6,14 @@ These notes appear in the update dialog that users see when a new version is ava
 Write clear, user-friendly notes about what changed in this version.
 -->
 
+## What's New in v0.4.22
+
+- **Blank Project template** — start from scratch with just a terminal
+- **Non-web projects** — default to Code tab, hide panel button always available
+- **Compact mode** — toolbar buttons align with macOS traffic lights
+- **Dashboard** — buttons no longer overlap traffic lights at narrow widths
+
+
 ## What's New in v0.4.21
 
 - **Fixed terminal freeze** — Switching tabs no longer kills terminal input
