@@ -24,6 +24,16 @@ interface ChangelogEntry {
 // Keep ~15 most recent versions for the sidebar
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.4.24',
+    items: [
+      'Community template gallery — browse, search, and download starter templates',
+      'Learn Mode — renamed from Education Mode, now covers all dashboard and workspace elements',
+      'Screenshot shortcuts (⌘⇧S / ⌘⇧C) now work even when the preview has focus',
+      'Learn Mode uses agent-agnostic language — works with Claude Code, Codex, or any terminal agent',
+      'Toolbar button text no longer wraps at narrow window sizes',
+    ],
+  },
+  {
     version: '0.4.23',
     items: [
       'New "Add Clients" button — introduces the Client Editor for inline content editing',
