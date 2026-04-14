@@ -5,20 +5,27 @@
 //! Organized into submodules:
 //! - `detection` — project type detection and page scanning
 //! - `metadata` — reading/writing `.shipstudio/project.json` metadata
+//! - `ui_state` — per-project UI state (last-opened, branch prefix, etc.)
+//! - `dev_server` — dev server configuration + cache clearing
 //! - `templates` — zip template extraction and export
-//! - `windows` — multi-window project management
+//! - `window_registry` — multi-window project management
 
 mod detection;
+mod dev_server;
 mod metadata;
 mod templates;
-mod windows;
+mod ui_state;
+mod window_registry;
 
 pub use detection::*;
+pub use dev_server::*;
 pub use metadata::*;
 pub use templates::*;
-pub use windows::*;
+pub use ui_state::*;
+pub use window_registry::*;
 
 use super::git::get_current_branch_sync;
+use crate::errors::CommandError;
 use crate::types::{DashboardProject, PageInfo, ProjectInfo, ProjectMetadata, ProjectType};
 use crate::utils::{create_command, validate_project_path};
 
@@ -102,7 +109,8 @@ fn is_valid_project(path: &std::path::Path) -> bool {
 // ============ Tauri Commands ============
 
 #[tauri::command]
-pub async fn list_projects() -> Result<Vec<ProjectInfo>, String> {
+#[tracing::instrument]
+pub async fn list_projects() -> Result<Vec<ProjectInfo>, CommandError> {
     let home = dirs::home_dir().ok_or("Could not find home directory")?;
     let shipstudio_dir = home.join("ShipStudio");
 
@@ -194,7 +202,8 @@ pub async fn list_projects() -> Result<Vec<ProjectInfo>, String> {
 
 /// Returns enhanced project list for dashboard with git info
 #[tauri::command]
-pub async fn get_dashboard_projects() -> Result<Vec<DashboardProject>, String> {
+#[tracing::instrument]
+pub async fn get_dashboard_projects() -> Result<Vec<DashboardProject>, CommandError> {
     let home = dirs::home_dir().ok_or("Could not find home directory")?;
     let shipstudio_dir = home.join("ShipStudio");
 
@@ -316,7 +325,8 @@ pub async fn get_dashboard_projects() -> Result<Vec<DashboardProject>, String> {
 /// Scans a project's pages/routes directory for page routes.
 /// Supports Next.js, SvelteKit, Astro, Nuxt, and static HTML projects.
 #[tauri::command]
-pub async fn list_pages(project_path: String) -> Result<Vec<PageInfo>, String> {
+#[tracing::instrument(fields(project = %project_path))]
+pub async fn list_pages(project_path: String) -> Result<Vec<PageInfo>, CommandError> {
     let project = validate_project_path(&project_path)?;
     let project_type = detection::detect_project_type(&project);
 
@@ -375,7 +385,8 @@ pub async fn list_pages(project_path: String) -> Result<Vec<PageInfo>, String> {
 
 /// Opens a folder in Finder (macOS)
 #[tauri::command]
-pub async fn open_in_finder(path: String) -> Result<(), String> {
+#[tracing::instrument]
+pub async fn open_in_finder(path: String) -> Result<(), CommandError> {
     let path = validate_project_path(&path)?;
 
     #[cfg(target_os = "macos")]
@@ -407,7 +418,8 @@ pub async fn open_in_finder(path: String) -> Result<(), String> {
 
 /// Ensures .shipstudio/ is in the project's .gitignore
 #[tauri::command]
-pub async fn ensure_gitignore_has_shipstudio(project_path: String) -> Result<(), String> {
+#[tracing::instrument(fields(project = %project_path))]
+pub async fn ensure_gitignore_has_shipstudio(project_path: String) -> Result<(), CommandError> {
     let project = validate_project_path(&project_path)?;
     let gitignore_path = project.join(".gitignore");
 
@@ -448,7 +460,8 @@ pub async fn ensure_gitignore_has_shipstudio(project_path: String) -> Result<(),
 
 /// Creates a blank project directory with a .gitignore.
 #[tauri::command]
-pub async fn create_blank_project(project_path: String) -> Result<(), String> {
+#[tracing::instrument(fields(project = %project_path))]
+pub async fn create_blank_project(project_path: String) -> Result<(), CommandError> {
     // Can't use validate_project_path because the directory doesn't exist yet.
     // Instead, validate that the parent is within ~/ShipStudio.
     let path = std::path::Path::new(&project_path);
@@ -458,7 +471,7 @@ pub async fn create_blank_project(project_path: String) -> Result<(), String> {
     let canonical_parent =
         dunce::canonicalize(parent).map_err(|e| format!("Invalid parent path: {e}"))?;
     if !canonical_parent.starts_with(&shipstudio_dir) {
-        return Err("Project must be inside ~/ShipStudio".to_string());
+        return Err(("Project must be inside ~/ShipStudio".to_string()).into());
     }
 
     std::fs::create_dir_all(path)
@@ -474,7 +487,8 @@ pub async fn create_blank_project(project_path: String) -> Result<(), String> {
 
 /// Removes the .git directory from a project so it starts fresh (not connected to template repo).
 #[tauri::command]
-pub async fn remove_git_history(project_path: String) -> Result<(), String> {
+#[tracing::instrument(fields(project = %project_path))]
+pub async fn remove_git_history(project_path: String) -> Result<(), CommandError> {
     let project = validate_project_path(&project_path)?;
     let git_dir = project.join(".git");
 
@@ -489,14 +503,17 @@ pub async fn remove_git_history(project_path: String) -> Result<(), String> {
 /// Deletes a project directory. Only allows deletion from ~/ShipStudio.
 /// External projects cannot be deleted — use unregister_external_project instead.
 #[tauri::command]
-pub async fn delete_project(path: String) -> Result<(), String> {
+#[tracing::instrument]
+pub async fn delete_project(path: String) -> Result<(), CommandError> {
     let project_path = std::path::Path::new(&path);
 
     // Check if this is an external project
     if let Ok(canonical) = dunce::canonicalize(project_path) {
         if crate::commands::external_projects::is_registered_external_path(&canonical)? {
             return Err(
-                "Cannot delete external projects. Use 'Remove from list' instead.".to_string(),
+                "Cannot delete external projects. Use 'Remove from list' instead."
+                    .to_string()
+                    .into(),
             );
         }
     }
@@ -505,50 +522,13 @@ pub async fn delete_project(path: String) -> Result<(), String> {
     let shipstudio_dir = home.join("ShipStudio");
 
     if !project_path.starts_with(&shipstudio_dir) {
-        return Err("Can only delete projects from ShipStudio directory".to_string());
+        return Err(("Can only delete projects from ShipStudio directory".to_string()).into());
     }
 
     if !project_path.exists() {
-        return Err("Project not found".to_string());
+        return Err(("Project not found".to_string()).into());
     }
 
     std::fs::remove_dir_all(project_path).map_err(|e| e.to_string())?;
     Ok(())
-}
-
-/// Clears project cache directories (.next, node_modules/.cache, etc.)
-/// Used when restarting the dev server to ensure a fresh build.
-#[tauri::command]
-pub async fn clear_project_cache(project_path: String) -> Result<(), String> {
-    let project = validate_project_path(&project_path)?;
-
-    // List of cache directories to clear
-    let cache_dirs = [
-        ".next",               // Next.js build cache
-        ".svelte-kit",         // SvelteKit build cache
-        ".nuxt",               // Nuxt build cache
-        ".output",             // Nuxt output directory
-        "node_modules/.cache", // Various build tool caches (babel, eslint, etc.)
-        ".turbo",              // Turborepo cache
-        ".swc",                // SWC compiler cache
-    ];
-
-    let mut errors = Vec::new();
-
-    for cache_dir in &cache_dirs {
-        let cache_path = project.join(cache_dir);
-        if cache_path.exists() {
-            if let Err(e) = std::fs::remove_dir_all(&cache_path) {
-                errors.push(format!("Failed to remove {cache_dir}: {e}"));
-            }
-        }
-    }
-
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        // Log errors but don't fail - some caches might be locked
-        tracing::warn!("Some cache directories could not be cleared: {:?}", errors);
-        Ok(())
-    }
 }

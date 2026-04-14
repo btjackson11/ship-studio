@@ -19,15 +19,15 @@ import type { PreviewHandle } from './Preview';
 import { SplitPane } from './SplitPane';
 import { PublishBranchDropdown } from './PublishBranchDropdown';
 import { BranchIndicator } from './BranchIndicator';
-import { BranchesTab } from './BranchesTab';
 import { CodeTab } from './CodeTab';
-import { PullRequestsTab } from './PullRequestsTab';
+import { BranchPRTabContainer } from './workspace/BranchPRTabContainer';
 import { CompactActionsRow } from './CompactMode';
+import { CompactBranchPRView } from './CompactBranchPRView';
 import { MainBranchBanner } from './MainBranchBanner';
 import { BrowserDropdown } from './BrowserDropdown';
-import { ConnectOverlay } from './ConnectOverlay';
-import { CodeHealthPanel } from './CodeHealthPanel';
 import type { CodeHealthPanelRef } from './CodeHealthPanel';
+import { HealthIndicatorBar } from './workspace/HealthIndicatorBar';
+import { CompactModeToggle } from './workspace/CompactModeToggle';
 import { WorkspaceModals } from './WorkspaceModals';
 import { WorkspaceHeader } from './WorkspaceHeader';
 import { PluginSlot } from './PluginSlot';
@@ -41,13 +41,8 @@ import {
   EyeIcon,
   PanelRightIcon,
   TerminalIcon,
-  ResetIcon,
   CompactIcon,
-  PinIcon,
-  ExpandIcon,
-  ArrowLeftIcon,
   ActivityIcon,
-  SettingsIcon,
 } from './icons';
 import { ToolbarDropdown } from './ToolbarDropdown';
 import { TerminalTabSelector } from './TerminalTabSelector';
@@ -65,7 +60,8 @@ import type { BranchInfo, PullRequestInfo } from '../lib/branches';
 import type { ChangedFile } from '../lib/git';
 import type { LoadedPlugin } from '../hooks/usePlugins';
 import type { PluginThemeData } from '../contexts/PluginContext';
-import '../styles/notifications.css';
+import { useModal } from '../contexts/ModalContext';
+import '../styles/features/notifications.css';
 
 // ---------------------------------------------------------------------------
 // Domain-grouped prop interfaces
@@ -171,36 +167,9 @@ interface PluginStateProps {
 }
 
 interface ModalProps {
-  showEnvEditor: boolean;
-  openEnvEditor: () => void;
-  closeEnvEditor: () => void;
-  showBackupsModal: boolean;
-  openBackupsModal: () => void;
-  closeBackupsModal: () => void;
-  showAssetsPanel: boolean;
-  openAssetsPanel: () => void;
-  closeAssetsPanel: () => void;
   isEducationMode: boolean;
   setIsEducationMode: (mode: boolean) => void;
   closeEducation: () => void;
-  showHelpModal: boolean;
-  openHelpModal: () => void;
-  closeHelpModal: () => void;
-  showSkillsModal: boolean;
-  openSkillsModal: () => void;
-  closeSkillsModal: () => void;
-  showMcpModal: boolean;
-  openMcpModal: () => void;
-  closeMcpModal: () => void;
-  showPluginManager: boolean;
-  openPluginManager: () => void;
-  closePluginManager: () => void;
-  showDevCommandModal: boolean;
-  openDevCommandModal: () => void;
-  closeDevCommandModal: () => void;
-  showProjectSettings: boolean;
-  openProjectSettings: () => void;
-  closeProjectSettings: () => void;
 }
 
 interface ToastProps {
@@ -355,6 +324,35 @@ export const WorkspaceView = memo(function WorkspaceView({
     getActiveTabAgent,
   } = terminal;
 
+  // Modal context (Block 6 migration). Modals self-read open state via useModal('id');
+  // we register focus side effects here for those that need the terminal re-focused.
+  const envEditorModal = useModal('envEditor');
+  const backupsModal = useModal('backups');
+  const assetsPanelModal = useModal('assetsPanel');
+  const helpModal = useModal('help');
+  const skillsModal = useModal('skills');
+  const mcpModal = useModal('mcp');
+  const pluginManagerModal = useModal('pluginManager');
+  const devCommandModal = useModal('devCommand');
+  const projectSettingsModal = useModal('projectSettings');
+  useEffect(() => {
+    const cleanups = [
+      envEditorModal.registerOnClose(focusActiveTerminal),
+      backupsModal.registerOnClose(focusActiveTerminal),
+      assetsPanelModal.registerOnClose(focusActiveTerminal),
+      devCommandModal.registerOnClose(focusActiveTerminal),
+      projectSettingsModal.registerOnClose(focusActiveTerminal),
+    ];
+    return () => cleanups.forEach((fn) => fn());
+  }, [
+    envEditorModal,
+    backupsModal,
+    assetsPanelModal,
+    devCommandModal,
+    projectSettingsModal,
+    focusActiveTerminal,
+  ]);
+
   const {
     hasDevServer,
     healthPanelRef,
@@ -429,34 +427,7 @@ export const WorkspaceView = memo(function WorkspaceView({
     installSuggestedPlugin,
   } = pluginState;
 
-  const {
-    showEnvEditor,
-    openEnvEditor,
-    closeEnvEditor,
-    showBackupsModal,
-    openBackupsModal,
-    closeBackupsModal,
-    showAssetsPanel,
-    openAssetsPanel,
-    closeAssetsPanel,
-    isEducationMode,
-    setIsEducationMode,
-    closeEducation,
-    showHelpModal,
-    closeHelpModal,
-    showSkillsModal,
-    openSkillsModal,
-    closeSkillsModal,
-    showMcpModal,
-    openMcpModal,
-    closeMcpModal,
-    showPluginManager,
-    openPluginManager,
-    closePluginManager,
-    showDevCommandModal,
-    openDevCommandModal,
-    closeDevCommandModal,
-  } = modals;
+  const { isEducationMode, setIsEducationMode, closeEducation } = modals;
 
   const { toasts: toastList, showToast, dismissToast } = toasts;
 
@@ -636,15 +607,14 @@ export const WorkspaceView = memo(function WorkspaceView({
           onBackToProjects={() => void handleBackToProjects()}
           isEducationMode={isEducationMode}
           onToggleEducationMode={() => setIsEducationMode(!isEducationMode)}
-          onOpenPluginManager={() => openPluginManager()}
-          onOpenAssetsPanel={openAssetsPanel}
-          onOpenEnvEditor={openEnvEditor}
-          onOpenBackupsModal={openBackupsModal}
+          onOpenPluginManager={pluginManagerModal.open}
+          onOpenAssetsPanel={assetsPanelModal.open}
+          onOpenEnvEditor={envEditorModal.open}
+          onOpenBackupsModal={backupsModal.open}
           integrations={integrations}
           onGitHubStatusChange={handleGitHubStatusChange}
           onGitHubConnect={handleGitHubConnect}
           focusActiveTerminal={focusActiveTerminal}
-          onToast={showToast}
           currentBranch={currentBranch}
           hasUncommittedChanges={hasUncommittedChanges}
           isPublishing={isPublishing}
@@ -678,92 +648,23 @@ export const WorkspaceView = memo(function WorkspaceView({
             rightCollapsed={isPreviewHidden}
             left={
               <div className="terminal-pane">
-                <CodeHealthPanel
-                  ref={healthPanelRef}
+                <HealthIndicatorBar
                   projectPath={currentProject.path}
-                  onToast={showToast}
+                  healthPanelRef={healthPanelRef}
                   onAskClaude={sendToClaude}
                   onHealthOutput={handleHealthOutput}
-                  toolbarLeft={
-                    isWebProject || customDevCommand ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <button
-                          className="show-preview-btn icon-only"
-                          onClick={() => void handleRestartDevServer()}
-                          disabled={
-                            isRestartingDevServer || (!hasDevServer && projectType !== 'statichtml')
-                          }
-                          title="Restart dev server"
-                          data-education-id="restart-server"
-                        >
-                          {isRestartingDevServer ? (
-                            <div className="capture-spinner" />
-                          ) : (
-                            <ResetIcon size={12} />
-                          )}
-                        </button>
-                        {!isWebProject && (
-                          <button
-                            className="show-preview-btn icon-only"
-                            onClick={openDevCommandModal}
-                            title="Edit dev command"
-                          >
-                            <SettingsIcon size={12} />
-                          </button>
-                        )}
-                        <button
-                          className="show-preview-btn icon-only"
-                          data-education-id="project-settings-button"
-                          onClick={() => modals.openProjectSettings()}
-                          title="Project settings"
-                        >
-                          <SettingsIcon size={12} />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        className="show-preview-btn icon-only"
-                        data-education-id="project-settings-button"
-                        onClick={() => modals.openProjectSettings()}
-                        title="Project settings"
-                      >
-                        <SettingsIcon size={12} />
-                      </button>
-                    )
-                  }
-                  toolbarRight={
-                    isPreviewHidden ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {isWebProject && (
-                          <>
-                            <button
-                              className="show-preview-btn icon-only"
-                              onClick={() => void handleEnterCompactMode()}
-                              title="Compact Mode"
-                              data-education-id="compact-button"
-                            >
-                              <CompactIcon size={12} />
-                            </button>
-                            <span data-education-id="browser-button">
-                              <BrowserDropdown
-                                url={`http://localhost:${devServerPort}`}
-                                buttonClassName="show-preview-btn icon-only"
-                                iconOnly
-                              />
-                            </span>
-                          </>
-                        )}
-                        <button
-                          className="show-preview-btn icon-only"
-                          onClick={() => setIsPreviewHidden(false)}
-                          title="Show Panel"
-                          data-education-id="show-preview"
-                        >
-                          <PanelRightIcon size={12} />
-                        </button>
-                      </div>
-                    ) : undefined
-                  }
+                  isWebProject={isWebProject}
+                  customDevCommand={customDevCommand}
+                  hasDevServer={hasDevServer}
+                  projectType={projectType}
+                  isRestartingDevServer={isRestartingDevServer}
+                  isPreviewHidden={isPreviewHidden}
+                  devServerPort={devServerPort}
+                  onRestartDevServer={handleRestartDevServer}
+                  onOpenDevCommand={devCommandModal.open}
+                  onOpenProjectSettings={projectSettingsModal.open}
+                  onEnterCompactMode={handleEnterCompactMode}
+                  onShowPreview={() => setIsPreviewHidden(false)}
                 />
                 {/* Terminal view - hidden in compact mode when viewing branches/PRs */}
                 <div
@@ -830,10 +731,10 @@ export const WorkspaceView = memo(function WorkspaceView({
                         agent={getActiveTabAgent()}
                         autoAcceptMode={autoAcceptMode}
                         onNotificationSettings={() => setShowNotificationSettings(true)}
-                        onSkills={() => openSkillsModal()}
-                        onMcp={() => openMcpModal()}
+                        onSkills={skillsModal.open}
+                        onMcp={mcpModal.open}
                         onAutoAcceptToggle={handleToolbarAutoAcceptToggle}
-                        onHelp={() => modals.openHelpModal()}
+                        onHelp={helpModal.open}
                         terminalPlugins={getSlotPlugins('terminal')}
                         pluginProject={pluginProject}
                         pluginActions={pluginActions}
@@ -842,22 +743,11 @@ export const WorkspaceView = memo(function WorkspaceView({
                     </div>
 
                     {/* Compact mode controls - visible only at narrow widths via CSS */}
-                    <div className="compact-mode-controls">
-                      <button
-                        className={`compact-control-btn ${isPinned ? 'active' : ''}`}
-                        onClick={() => void handlePinToggle()}
-                        title={isPinned ? 'Unpin from top' : 'Pin to top'}
-                      >
-                        <PinIcon size={12} />
-                      </button>
-                      <button
-                        className="compact-control-btn"
-                        onClick={() => void handleExpandToFull()}
-                        title="Expand to full mode"
-                      >
-                        <ExpandIcon size={12} />
-                      </button>
-                    </div>
+                    <CompactModeToggle
+                      isPinned={isPinned}
+                      onPinToggle={handlePinToggle}
+                      onExpandToFull={handleExpandToFull}
+                    />
                   </div>
                   <div className="terminal-content" data-education-id="claude-terminal">
                     {terminalTabs.map((tab) => (
@@ -899,80 +789,29 @@ export const WorkspaceView = memo(function WorkspaceView({
                   </div>
                 </div>
 
-                {/* Compact branches/PRs view - shown in compact mode when viewing branches or PRs */}
-                <div
-                  className={`compact-branches-view ${compactView === 'terminal' ? 'compact-hidden' : ''}`}
-                >
-                  {/* Back button header */}
-                  <div className="compact-branches-header">
-                    <button className="compact-back-btn" onClick={() => setCompactView('terminal')}>
-                      <ArrowLeftIcon size={12} />
-                      <span>Terminal</span>
-                    </button>
-                    <span className="compact-branches-title">
-                      {compactView === 'branches' ? 'Branches' : 'Pull Requests'}
-                    </span>
-                    {/* Compact mode controls */}
-                    <div className="compact-mode-controls" style={{ marginLeft: 'auto' }}>
-                      <button
-                        className={`compact-control-btn ${isPinned ? 'active' : ''}`}
-                        onClick={() => void handlePinToggle()}
-                        title={isPinned ? 'Unpin from top' : 'Pin to top'}
-                      >
-                        <PinIcon size={12} />
-                      </button>
-                      <button
-                        className="compact-control-btn"
-                        onClick={() => void handleExpandToFull()}
-                        title="Expand to full mode"
-                      >
-                        <ExpandIcon size={12} />
-                      </button>
-                    </div>
-                  </div>
-                  {/* Content */}
-                  <div className="compact-branches-content">
-                    {compactView === 'branches' &&
-                      integrations.github.cliStatus.authenticated &&
-                      integrations.projectGithub?.status === 'connected' && (
-                        <BranchesTab
-                          branches={branches}
-                          currentBranch={currentBranch || ''}
-                          projectPath={currentProject.path}
-                          githubUsername={integrations.github.username}
-                          openPRs={openPRs}
-                          onBranchSwitch={(branchName) => {
-                            void handleBranchSwitch(branchName);
-                            setCompactView('terminal'); // Return to terminal after switching
-                          }}
-                          onSubmitForReview={(branchName) => setShowSubmitReview(branchName)}
-                          onViewPR={() => setCompactView('prs')}
-                          onRefresh={() => void fetchBranchInfo(currentProject.path)}
-                          onToast={showToast}
-                        />
-                      )}
-                    {compactView === 'prs' &&
-                      integrations.github.cliStatus.authenticated &&
-                      integrations.projectGithub?.status === 'connected' && (
-                        <PullRequestsTab
-                          projectPath={currentProject.path}
-                          githubUsername={integrations.github.username}
-                          currentBranch={currentBranch || undefined}
-                          onRefresh={() => void fetchBranchInfo(currentProject.path)}
-                          onToast={showToast}
-                          onBranchSwitch={(branchName) => {
-                            void handleBranchSwitch(branchName);
-                            // TODO: Chain off handleBranchSwitch promise instead of arbitrary timeout — branch switch may take longer or shorter than 1.5s
-                            setTimeout(() => void handleRestartDevServer(), 1500);
-                          }}
-                          onNavigateToBranches={() => setCompactView('branches')}
-                          onResolveConflicts={(headBranch, baseBranch) =>
-                            void handleResolveConflicts(headBranch, baseBranch)
-                          }
-                        />
-                      )}
-                  </div>
-                </div>
+                <CompactBranchPRView
+                  compactView={compactView}
+                  setCompactView={setCompactView}
+                  isPinned={isPinned}
+                  onPinToggle={handlePinToggle}
+                  onExpandToFull={handleExpandToFull}
+                  projectPath={currentProject.path}
+                  currentBranch={currentBranch || ''}
+                  branches={branches}
+                  openPRs={openPRs}
+                  integrations={integrations}
+                  onBranchSwitchFromBranches={(branchName) => void handleBranchSwitch(branchName)}
+                  onBranchSwitchFromPR={(branchName) => {
+                    void handleBranchSwitch(branchName);
+                    // TODO: chain off handleBranchSwitch promise instead of arbitrary timeout
+                    setTimeout(() => void handleRestartDevServer(), 1500);
+                  }}
+                  onSubmitForReview={(branchName) => setShowSubmitReview(branchName)}
+                  onRefresh={() => void fetchBranchInfo(currentProject.path)}
+                  onResolveConflicts={(headBranch, baseBranch) =>
+                    void handleResolveConflicts(headBranch, baseBranch)
+                  }
+                />
               </div>
             }
             right={
@@ -998,7 +837,6 @@ export const WorkspaceView = memo(function WorkspaceView({
                       onDiscard={() => {
                         void checkGitStatus(currentProject.path);
                       }}
-                      onToast={showToast}
                       onSave={() => setForcePublishOpen(true)}
                     />
                   )}
@@ -1091,7 +929,6 @@ export const WorkspaceView = memo(function WorkspaceView({
                       isBranchSwitching={isBranchSwitching}
                       isDevServerRestarting={isRestartingDevServer}
                       onSendToClaude={sendToClaude}
-                      onToast={showToast}
                       previewPlugins={
                         <PluginSlot
                           name="preview"
@@ -1138,65 +975,25 @@ export const WorkspaceView = memo(function WorkspaceView({
                 )}
                 {workspaceTab === 'code' && (
                   <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
-                    <CodeTab
-                      projectPath={currentProject.path}
-                      onToast={showToast}
-                      onSendToAgent={sendToClaude}
-                    />
+                    <CodeTab projectPath={currentProject.path} onSendToAgent={sendToClaude} />
                   </div>
                 )}
-                {(workspaceTab === 'branches' || (!isWebProject && workspaceTab === 'preview')) &&
-                  (integrations.github.cliStatus.authenticated &&
-                  integrations.projectGithub?.status === 'connected' ? (
-                    <BranchesTab
-                      branches={branches}
-                      currentBranch={currentBranch || ''}
-                      projectPath={currentProject.path}
-                      githubUsername={integrations.github.username}
-                      openPRs={openPRs}
-                      onBranchSwitch={(branchName) => void handleBranchSwitch(branchName)}
-                      onSubmitForReview={(branchName) => setShowSubmitReview(branchName)}
-                      onViewPR={() => setWorkspaceTab('prs')}
-                      onRefresh={() => void fetchBranchInfo(currentProject.path)}
-                      onToast={showToast}
-                    />
-                  ) : (
-                    <div style={{ position: 'relative', flex: 1 }}>
-                      <ConnectOverlay
-                        title="Connect GitHub to manage branches"
-                        description="Create branches, switch between versions, and collaborate with your team."
-                        onConnect={() => void handleGitHubConnect()}
-                      />
-                    </div>
-                  ))}
-                {workspaceTab === 'prs' &&
-                  (integrations.github.cliStatus.authenticated &&
-                  integrations.projectGithub?.status === 'connected' ? (
-                    <PullRequestsTab
-                      projectPath={currentProject.path}
-                      githubUsername={integrations.github.username}
-                      currentBranch={currentBranch || undefined}
-                      onRefresh={() => void fetchBranchInfo(currentProject.path)}
-                      onToast={showToast}
-                      onBranchSwitch={(branchName) => {
-                        void handleBranchSwitch(branchName);
-                        // TODO: Chain off handleBranchSwitch promise instead of arbitrary timeout — branch switch may take longer or shorter than 1.5s
-                        setTimeout(() => void handleRestartDevServer(), 1500);
-                      }}
-                      onNavigateToBranches={() => setWorkspaceTab('branches')}
-                      onResolveConflicts={(headBranch, baseBranch) =>
-                        void handleResolveConflicts(headBranch, baseBranch)
-                      }
-                    />
-                  ) : (
-                    <div style={{ position: 'relative', flex: 1 }}>
-                      <ConnectOverlay
-                        title="Connect GitHub to view pull requests"
-                        description="Submit code for review, merge changes, and track your team's work."
-                        onConnect={() => void handleGitHubConnect()}
-                      />
-                    </div>
-                  ))}
+                <BranchPRTabContainer
+                  workspaceTab={workspaceTab}
+                  setWorkspaceTab={setWorkspaceTab}
+                  isWebProject={isWebProject}
+                  integrations={integrations}
+                  branches={branches}
+                  openPRs={openPRs}
+                  currentBranch={currentBranch}
+                  projectPath={currentProject.path}
+                  handleBranchSwitch={handleBranchSwitch}
+                  handleRestartDevServer={handleRestartDevServer}
+                  setShowSubmitReview={setShowSubmitReview}
+                  fetchBranchInfo={fetchBranchInfo}
+                  handleResolveConflicts={handleResolveConflicts}
+                  handleGitHubConnect={handleGitHubConnect}
+                />
               </div>
             }
           />
@@ -1220,7 +1017,6 @@ export const WorkspaceView = memo(function WorkspaceView({
                 setIsCompactPublishOpen(false);
                 focusActiveTerminal();
               }}
-              onToast={showToast}
               isPublishing={isPublishing}
               setIsPublishing={setIsPublishing}
               onPublishError={handlePublishError}
@@ -1244,8 +1040,8 @@ export const WorkspaceView = memo(function WorkspaceView({
             isGitHubConnected={integrations.projectGithub?.status === 'connected'}
             isSynced={!hasUncommittedChanges}
             onRestartServer={() => void handleRestartDevServer()}
-            onOpenAssets={openAssetsPanel}
-            onOpenEnvEditor={openEnvEditor}
+            onOpenAssets={assetsPanelModal.open}
+            onOpenEnvEditor={envEditorModal.open}
             onCreateRepo={() => {
               // Button only shows when GitHub not connected, so prompt GitHub connection
               void handleGitHubConnect();
@@ -1265,18 +1061,11 @@ export const WorkspaceView = memo(function WorkspaceView({
         <WorkspaceModals
           projectPath={currentProject.path}
           currentProjectPath={currentProject.path}
-          showEnvEditor={showEnvEditor}
-          onCloseEnvEditor={closeEnvEditor}
-          onToast={showToast}
-          showBackupsModal={showBackupsModal}
-          onCloseBackupsModal={closeBackupsModal}
           onBackupRestore={() => {
             void fetchBranchInfo(currentProject.path);
             void handleGitHubStatusChange();
           }}
           onBackupCreatePR={(branchName) => setShowSubmitReview(branchName)}
-          showAssetsPanel={showAssetsPanel}
-          onCloseAssetsPanel={closeAssetsPanel}
           isEducationMode={isEducationMode}
           onCloseEducation={closeEducation}
           toasts={toastList}
@@ -1294,16 +1083,8 @@ export const WorkspaceView = memo(function WorkspaceView({
           onSaveNotificationSettings={handleSaveNotificationSettings}
           onCloseNotificationSettings={() => setShowNotificationSettings(false)}
           agentDisplayName={getActiveTabAgent().displayName}
-          showHelpModal={showHelpModal}
-          onCloseHelpModal={() => closeHelpModal()}
-          showSkillsModal={showSkillsModal}
-          onCloseSkillsModal={() => closeSkillsModal()}
           agentId={getActiveTabAgent().id}
           activeAgent={getActiveTabAgent()}
-          showMcpModal={showMcpModal}
-          onCloseMcpModal={() => closeMcpModal()}
-          showPluginManager={showPluginManager}
-          onClosePluginManager={() => closePluginManager()}
           onPluginsChanged={() => void reloadPlugins()}
           loadedPlugins={loadedPlugins}
           pluginSuggestion={pluginSuggestion}
@@ -1346,14 +1127,10 @@ export const WorkspaceView = memo(function WorkspaceView({
           onAuthTerminalExit={(exitCode) =>
             void handleAuthTerminalExit(exitCode, currentProject.path)
           }
-          showDevCommandModal={showDevCommandModal}
           customDevCommand={customDevCommand}
           onSaveDevCommand={handleSaveDevCommand}
-          onCloseDevCommandModal={closeDevCommandModal}
-          showProjectSettings={modals.showProjectSettings}
           devServerPort={devServerPort}
           onSavePort={lifecycle.handleSavePort}
-          onCloseProjectSettings={modals.closeProjectSettings}
           isWebProject={isWebProject}
           pluginTerminal={pluginTerminal}
           pluginTerminalExited={pluginTerminalExited}
