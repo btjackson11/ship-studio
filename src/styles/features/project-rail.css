@@ -1,31 +1,27 @@
 /**
- * ProjectRail — fixed left sidebar of pinned projects.
+ * ProjectRail — left sidebar column of pinned projects.
  *
- * Layout slot: rendered as a sibling of the main app container; the rail's
- * presence is what gives the workspace its left padding (see `.app--with-rail`
- * modifier defined here).
- *
- * Width is fixed to keep the workspace layout calculations predictable —
- * Preview iframe sizing, terminal fit, etc. all assume a stable canvas width.
+ * In the workspace view the rail sits inside `.workspace-body` (a flex row
+ * below the titlebar). In the projects view it sits inside
+ * `.projects-with-rail`. Both cases: the rail is a flex child, not fixed.
  */
 
 .project-rail {
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 56px;
+  width: 77px;
+  flex-shrink: 0;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* Top padding leaves clearance for the macOS traffic-light buttons
-   * (they live at ~y=12, ~14px tall; we want the first pin to start
-   * comfortably below them). Bottom padding is the normal small gap. */
-  padding: 44px 0 var(--spacing-sm);
-  z-index: var(--z-dropdown);
+  padding: var(--spacing-sm) 0;
   user-select: none;
+}
+
+/* On the projects view the rail starts at the top of the window (no
+ * titlebar above it), so add padding to clear macOS traffic lights. */
+.projects-with-rail > .project-rail {
+  padding-top: 44px;
 }
 
 .project-rail-list {
@@ -47,8 +43,8 @@
 
 .project-rail-item-wrapper {
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   transition: opacity 0.15s ease;
 }
 
@@ -117,35 +113,29 @@ body.rail-drag-active iframe {
 
 .project-rail-item {
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   padding: 0;
   background: transparent;
-  border: 1px solid var(--border);
+  border: 2px solid transparent;
   border-radius: var(--radius-md);
   cursor: pointer;
   overflow: hidden;
   display: block;
-  transition:
-    transform 0.15s ease,
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
+  transition: border-color 0.15s ease;
 }
 
 .project-rail-item:hover {
   border-color: var(--accent);
-  transform: translateY(-1px);
 }
 
 .project-rail-item:focus-visible {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .project-rail-item.is-current {
   border-color: var(--action);
-  box-shadow: 0 0 0 1px var(--action);
 }
 
 .project-rail-thumb {
@@ -269,11 +259,94 @@ body.rail-drag-active iframe {
   color: #ffffff;
 }
 
-/*
- * Layout shift: when the rail has at least one pin, push the rest of the
- * app over by 56px. The body-level class is toggled in App.tsx so this
- * applies to every view (projects, workspace, etc.) without per-view CSS.
- */
-body.has-project-rail {
-  padding-left: 56px;
+/* "+" button — last item in the rail list. */
+.project-rail-add {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  border: 2px dashed var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 22px;
+  font-weight: 300;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.project-rail-add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Project picker popover — positioned by JS via style prop. */
+.project-rail-picker {
+  position: fixed;
+  width: 220px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  z-index: var(--z-tooltip);
+  overflow: hidden;
+}
+
+.project-rail-picker-search {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+
+.project-rail-picker-search::placeholder {
+  color: var(--text-muted);
+}
+
+.project-rail-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--spacing-xs);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.project-rail-picker-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-rail-picker-item:hover {
+  background: var(--bg-primary);
+}
+
+.project-rail-picker-empty {
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Projects view wrapper: rail + dashboard in a row. */
+.projects-with-rail {
+  display: flex;
+  height: 100%;
+  width: 100%;
 }

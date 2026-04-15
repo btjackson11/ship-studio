@@ -377,11 +377,12 @@ function AppContents({ initialProjectPath }: AppProps) {
     await enterCompactMode();
   };
 
-  const { pinnedProjects, handleTogglePin, handleRailClick, handleRailUnpin } = useProjectRail({
-    currentProjectPath: currentProject?.path ?? null,
-    handleSelectProject,
-    showToast,
-  });
+  const { pinnedProjects, handleTogglePin, handleRailClick, handleRailUnpin, handleAddProject } =
+    useProjectRail({
+      currentProjectPath: currentProject?.path ?? null,
+      handleSelectProject,
+      showToast,
+    });
 
   // App setup, onboarding, HMR recovery, auto-open, keyboard shortcuts
   const { projectsLoading, setProjectsLoading } = useAppSetup({
@@ -865,40 +866,46 @@ function AppContents({ initialProjectPath }: AppProps) {
   if (view === 'projects') {
     return (
       <>
-        <ProjectRail
-          rows={pinnedProjects.rows}
-          onPinClick={handleRailClick}
-          onUnpin={handleRailUnpin}
-          onReorder={(orderedPaths) => void pinnedProjects.reorder(orderedPaths)}
-        />
-        <ProjectsView
-          onSelectProject={handleSelectProjectCallback}
-          onCreateProject={handleCreateProject}
-          onImportProject={handleImportProject}
-          onImportLocalFolder={handleImportLocalFolderCallback}
-          isGitHubAuthenticated={integrations.github.cliStatus.authenticated}
-          githubUsername={integrations.github.username}
-          isAuthCheckDone={isInitialCheckDone}
-          onGitHubConnect={handleGitHubConnectFromOverlay}
-          showCreateModal={showCreateModal}
-          onCloseCreateModal={handleCloseCreateModal}
-          onProjectCreated={handleProjectCreated}
-          importView={importView}
-          setImportView={setImportView}
-          onProjectImported={handleProjectImported}
-          authTerminalConfig={authTerminalConfig}
-          closeAuthTerminal={closeAuthTerminal}
-          onAuthTerminalExit={handleAuthTerminalExitForProjects}
-          pluginProject={pluginProject}
-          pluginActions={pluginActions}
-          pluginTheme={pluginTheme}
-          getSlotPlugins={getSlotPlugins}
-          projectsLoading={projectsLoading}
-          onLoadingChange={setProjectsLoading}
-          cleanupStatus={cleanupStatus}
-          pinnedSet={pinnedProjects.pinnedSet}
-          onTogglePin={(path, pinned) => void handleTogglePin(path, pinned)}
-        />
+        <div className="projects-with-rail">
+          {pinnedProjects.rows.length > 0 && (
+            <ProjectRail
+              rows={pinnedProjects.rows}
+              onPinClick={handleRailClick}
+              onUnpin={handleRailUnpin}
+              onReorder={(orderedPaths) => void pinnedProjects.reorder(orderedPaths)}
+              onAddProject={handleAddProject}
+            />
+          )}
+          <ProjectsView
+            onSelectProject={handleSelectProjectCallback}
+            onCreateProject={handleCreateProject}
+            onImportProject={handleImportProject}
+            onImportLocalFolder={handleImportLocalFolderCallback}
+            isGitHubAuthenticated={integrations.github.cliStatus.authenticated}
+            githubUsername={integrations.github.username}
+            isAuthCheckDone={isInitialCheckDone}
+            onGitHubConnect={handleGitHubConnectFromOverlay}
+            showCreateModal={showCreateModal}
+            onCloseCreateModal={handleCloseCreateModal}
+            onProjectCreated={handleProjectCreated}
+            importView={importView}
+            setImportView={setImportView}
+            onProjectImported={handleProjectImported}
+            authTerminalConfig={authTerminalConfig}
+            closeAuthTerminal={closeAuthTerminal}
+            onAuthTerminalExit={handleAuthTerminalExitForProjects}
+            pluginProject={pluginProject}
+            pluginActions={pluginActions}
+            pluginTheme={pluginTheme}
+            getSlotPlugins={getSlotPlugins}
+            projectsLoading={projectsLoading}
+            onLoadingChange={setProjectsLoading}
+            cleanupStatus={cleanupStatus}
+            pinnedSet={pinnedProjects.pinnedSet}
+            onTogglePin={(path, pinned) => void handleTogglePin(path, pinned)}
+          />
+        </div>
+        {/* .projects-with-rail */}
         {toasts.length > 0 && (
           <div className="toast-container">
             {toasts.map((t) => (
@@ -942,14 +949,19 @@ function AppContents({ initialProjectPath }: AppProps) {
       </>
     );
   }
-  return (
-    <ToastContext.Provider value={toastsProps}>
+  const railElement =
+    pinnedProjects.rows.length > 0 ? (
       <ProjectRail
         rows={pinnedProjects.rows}
         onPinClick={handleRailClick}
         onUnpin={handleRailUnpin}
         onReorder={(orderedPaths) => void pinnedProjects.reorder(orderedPaths)}
+        onAddProject={handleAddProject}
       />
+    ) : null;
+
+  return (
+    <ToastContext.Provider value={toastsProps}>
       <WorkspaceView
         currentProject={currentProject}
         previewRef={previewRef}
@@ -969,6 +981,7 @@ function AppContents({ initialProjectPath }: AppProps) {
         pluginActions={pluginActions}
         pluginTheme={pluginTheme}
         handleEnterCompactMode={handleEnterCompactMode}
+        rail={railElement}
       />
       {quitConfirmModal}
     </ToastContext.Provider>

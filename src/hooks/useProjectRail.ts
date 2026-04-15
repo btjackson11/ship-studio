@@ -11,7 +11,7 @@
  * @module hooks/useProjectRail
  */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import type { Project } from '../lib/project';
 import { usePinnedProjects, type UsePinnedProjectsReturn } from './usePinnedProjects';
 import { logger } from '../lib/logger';
@@ -34,14 +34,9 @@ export interface UseProjectRailReturn {
   handleRailClick: (projectPath: string) => void;
   /** Unpin a project from the rail's context menu. */
   handleRailUnpin: (projectPath: string) => void;
+  /** Pin a project from the picker and open it. */
+  handleAddProject: (projectPath: string) => void;
 }
-
-/**
- * The `has-project-rail` body class drives the global left-padding that
- * keeps content out from under the fixed-position rail. Applied here
- * (rather than per-view) because the rail is a sibling of every view.
- */
-const BODY_CLASS = 'has-project-rail';
 
 export function useProjectRail({
   currentProjectPath,
@@ -49,17 +44,6 @@ export function useProjectRail({
   showToast,
 }: UseProjectRailParams): UseProjectRailReturn {
   const pinnedProjects = usePinnedProjects(currentProjectPath);
-
-  useEffect(() => {
-    if (pinnedProjects.hasPins) {
-      document.body.classList.add(BODY_CLASS);
-    } else {
-      document.body.classList.remove(BODY_CLASS);
-    }
-    return () => {
-      document.body.classList.remove(BODY_CLASS);
-    };
-  }, [pinnedProjects.hasPins]);
 
   const handleTogglePin = useCallback(
     async (projectPath: string, shouldPin: boolean) => {
@@ -99,5 +83,16 @@ export function useProjectRail({
     [handleTogglePin]
   );
 
-  return { pinnedProjects, handleTogglePin, handleRailClick, handleRailUnpin };
+  const handleAddProject = useCallback(
+    (projectPath: string) => {
+      void (async () => {
+        await handleTogglePin(projectPath, true);
+        const projectName = projectPath.split('/').pop() ?? 'project';
+        void handleSelectProject({ name: projectName, path: projectPath, thumbnail: null });
+      })();
+    },
+    [handleTogglePin, handleSelectProject]
+  );
+
+  return { pinnedProjects, handleTogglePin, handleRailClick, handleRailUnpin, handleAddProject };
 }
