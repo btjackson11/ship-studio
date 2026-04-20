@@ -2,7 +2,9 @@
 .terminal-tabs-bar {
   display: flex;
   align-items: center;
-  padding: 9px 12px;
+  /* Match .terminal-toolbar's 10px horizontal padding so the Restart /
+     Settings buttons align vertically with the sidebar toggle above. */
+  padding: 9px 10px;
   min-height: 48px;
   background: #252525;
   border-bottom: 1px solid var(--border);
@@ -246,6 +248,15 @@
 
 .terminal-tab-content.active {
   visibility: visible;
+}
+
+/* Left-side actions in the terminal tabs bar (Restart dev server +
+ * Project settings). Pairs with `.terminal-logs-tabs`, which pushes
+ * itself to the right via `margin-left: auto`. */
+.terminal-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .terminal-logs-tabs {

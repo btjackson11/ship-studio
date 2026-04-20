@@ -1,18 +1,27 @@
-/* Changelog Panel - sticky sidebar */
+/* Changelog Panel — inline block below projects. */
 .changelog {
-  position: sticky;
-  top: 44px;
   display: flex;
   flex-direction: column;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  width: 260px;
-  /* 100vh minus top padding (44px for traffic lights) and matching bottom padding */
-  height: calc(100vh - 88px);
-  flex-shrink: 0;
   overflow: hidden;
-  margin-left: 24px;
+}
+
+/* Rendered inline in the dashboard column *after* the project grid.
+ * Capped at 500px tall with a scrollable list so longer changelogs don't
+ * push the Settings row way off-screen. */
+.project-list.dashboard > .changelog {
+  width: auto;
+  max-height: 500px;
+  margin: 24px 0 0;
+  position: static;
+}
+
+.project-list.dashboard > .changelog .changelog-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .changelog-header {
@@ -216,9 +225,55 @@
   background: var(--bg-tertiary);
 }
 
-/* Hide on narrow screens */
-@media (max-width: 1100px) {
+/* Hide on very narrow screens only — the dashboard column is single-column
+ * below that width and the changelog would otherwise crowd out the
+ * project grid entirely. */
+@media (max-width: 640px) {
   .changelog {
     display: none;
   }
+
+  /* …but *do* show it inside the modal at any width. */
+  .changelog-modal .changelog {
+    display: flex;
+  }
+}
+
+/* =========================================================
+   Changelog inside the ChangelogModal (What's New)
+   ========================================================= */
+
+.changelog-modal {
+  width: min(560px, 90vw);
+  max-height: min(720px, 85vh);
+  display: flex;
+  flex-direction: column;
+}
+
+.changelog-modal-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.changelog-in-modal {
+  /* No border — the ModalFrame container already provides the chrome. */
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  max-height: none;
+  flex: 1;
+  min-height: 0;
+}
+
+/* The inline Changelog has its own "What's New / Recent updates" header.
+   When rendered inside the modal, the ModalFrame already shows a title,
+   so hide the inner one. */
+.changelog-in-modal .changelog-header {
+  display: none;
+}
+
+.changelog-in-modal .changelog-list {
+  padding: 4px 0 var(--spacing-md);
 }

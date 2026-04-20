@@ -95,6 +95,21 @@ Node.prototype.removeChild = function <T extends Node>(child: T): T {
   return origRemoveChild.call(this, child) as T;
 };
 
+// Same motivation for insertBefore: if OverlayScrollbars has relocated the
+// reference node into its viewport wrapper, React's commit phase calls
+// `parent.insertBefore(newNode, referenceNode)` against the original parent,
+// which throws NotFoundError ("The object can not be found here."). Redirect
+// the insert to the reference node's current parent — the viewport is always
+// a descendant of the original host so visually it lands in the right place.
+// eslint-disable-next-line @typescript-eslint/unbound-method
+const origInsertBefore = Node.prototype.insertBefore;
+Node.prototype.insertBefore = function <T extends Node>(newNode: T, referenceNode: Node | null): T {
+  if (referenceNode && referenceNode.parentNode && referenceNode.parentNode !== this) {
+    return referenceNode.parentNode.insertBefore(newNode, referenceNode);
+  }
+  return origInsertBefore.call(this, newNode, referenceNode) as T;
+};
+
 // Initialize OverlayScrollbars on scrollable elements.
 // Uses a debounced MutationObserver to catch dynamically added containers.
 // Skips elements with scrollbar-width: none (intentionally hidden scrollbars).
@@ -115,6 +130,12 @@ const OS_SKIP_SELECTOR = [
   '.dashboard-scroll-container',
   '.changelog-list',
   '.support-panel',
+  // Workspace sidebar scroll owns its own webkit scrollbar styling and
+  // applies `!important` block layout to its direct children. Letting
+  // OverlayScrollbars wrap it breaks the scrollbar entirely (the OS
+  // viewport gets caught by the `> *` rule) and makes the list unscrollable
+  // when several projects are open.
+  '.workspace-sidebar-scroll',
 ].join(', ');
 
 function initScrollbars() {

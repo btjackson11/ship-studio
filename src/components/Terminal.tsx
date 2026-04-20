@@ -17,7 +17,26 @@ import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebglAddon } from '@xterm/addon-webgl';
-import { spawn, IPty } from 'tauri-pty';
+import {
+  openPtySession,
+  attachPtySession,
+  writePtySession,
+  resizePtySession,
+  killPtySession,
+  onPtySessionData,
+  onPtySessionExit,
+} from '../lib/ptySession';
+import type { UnlistenFn } from '@tauri-apps/api/event';
+
+/**
+ * Handle to a backend-owned PTY session. A Terminal component attaches to
+ * one via `openPtySession(sessionId)`; unmounting detaches (unsubscribes)
+ * but leaves the PTY running. Only explicit close-tab actions kill it.
+ */
+interface SessionHandle {
+  sessionId: string;
+  pid: number | null;
+}
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { homeDir } from '@tauri-apps/api/path';
@@ -30,15 +49,16 @@ import '@xterm/xterm/css/xterm.css';
 /** Agent status based on terminal title */
 export type AgentStatus = 'thinking' | 'waiting' | 'idle';
 
-/** Max buffer size for hidden terminal output (500KB) */
-const MAX_HIDDEN_BUFFER = 512 * 1024;
-
 /** Props for the Terminal component */
 interface TerminalProps {
   /** Agent configuration to use for this terminal */
   agent: AgentConfig;
   /** Absolute path to the project directory where the agent will run */
   projectPath: string;
+  /** Callback fired when the PTY is spawned successfully. `pid` is the OS
+   *  process id of the agent — used by the session registry to track
+   *  liveness across project switches. */
+  onSpawn?: (pid: number | null) => void;
   /** Callback fired when the agent process exits */
   onExit?: (code: number | null) => void;
   /** Whether to run the agent in auto-accept mode */
@@ -76,6 +96,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   {
     agent,
     projectPath,
+    onSpawn,
     onExit,
     autoAcceptMode = false,
     onStatusChange,
@@ -89,53 +110,51 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const ptyRef = useRef<IPty | null>(null);
-  // Buffer for data received while terminal is hidden
-  const hiddenBufferRef = useRef<string[]>([]);
-  const hiddenBufferSizeRef = useRef(0);
+  const ptyRef = useRef<SessionHandle | null>(null);
   const isActiveRef = useRef(isActive);
-  // Deferred spawn: set by the main effect, called when tab becomes active
-  const deferredSpawnRef = useRef<(() => void) | null>(null);
-  // Track IDisposable handles from pty.onData/onExit so we can remove listeners on cleanup.
-  // Without this, killed PTY processes continue flooding Tauri IPC → microtasks → 100% CPU.
+  // Track Unlisten handles from the PTY session events so we can unsubscribe
+  // them on unmount without killing the backend PTY.
   const ptyDisposablesRef = useRef<Array<{ dispose(): void }>>([]);
   const [isReady, setIsReady] = useState(false);
   const [isFocused, setIsFocused] = useState(false); // Start unfocused to show overlay until user clicks
 
-  // When tab becomes active: flush hidden buffer and spawn PTY if deferred
+  // Mirror `isActive` to a ref so non-effect closures (input handler,
+  // resize observer) can read it without re-creating.
   useEffect(() => {
     isActiveRef.current = isActive;
-    if (isActive) {
-      // Flush buffered output
-      if (terminalRef.current && hiddenBufferRef.current.length > 0) {
-        for (const chunk of hiddenBufferRef.current) {
-          terminalRef.current.write(chunk);
-        }
-        hiddenBufferRef.current = [];
-        hiddenBufferSizeRef.current = 0;
-      }
-      // Spawn PTY if it was deferred (tab was created while hidden)
-      if (deferredSpawnRef.current) {
-        const spawn = deferredSpawnRef.current;
-        deferredSpawnRef.current = null;
-        spawn();
-      }
-    }
   }, [isActive]);
 
   // Use refs for callbacks to prevent effect re-runs when callback references change
   const onExitRef = useRef(onExit);
+  const onSpawnRef = useRef(onSpawn);
   const onStatusChangeRef = useRef(onStatusChange);
   const onTitleChangeRef = useRef(onTitleChange);
   const lastStatusRef = useRef<AgentStatus>('idle');
   useEffect(() => {
     onExitRef.current = onExit;
+    onSpawnRef.current = onSpawn;
     onStatusChangeRef.current = onStatusChange;
     onTitleChangeRef.current = onTitleChange;
-  }, [onExit, onStatusChange, onTitleChange]);
+  }, [onExit, onSpawn, onStatusChange, onTitleChange]);
+
+  // Auto-accept is a spawn-time flag (CLI arg) — it can't be toggled on a
+  // live PTY. Keep it in a ref so a later change to the scalar doesn't
+  // re-run the setup effect and tear the PTY down. This matters during
+  // project switching: `autoAcceptMode` is a single shared scalar whose
+  // value flips to the incoming project's preference, and including it in
+  // the setup-effect deps used to kill every background project's Terminal
+  // in the process.
+  const autoAcceptModeRef = useRef(autoAcceptMode);
+  useEffect(() => {
+    autoAcceptModeRef.current = autoAcceptMode;
+  }, [autoAcceptMode]);
 
   const cleanup = useCallback(() => {
-    // Dispose PTY event listeners FIRST to stop IPC message flood
+    // Unmount detaches this component from the backend PTY session — it
+    // does NOT kill the PTY. Kill happens exclusively through the
+    // imperative `kill()` handle (close tab, switch agent, close project).
+    // That separation is what lets a background project's Terminal unmount
+    // freely while its agent keeps running.
     for (const d of ptyDisposablesRef.current) {
       try {
         d.dispose();
@@ -144,22 +163,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       }
     }
     ptyDisposablesRef.current = [];
-
-    if (ptyRef.current) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      const pid = (ptyRef.current as any).pid as number | undefined;
-      if (typeof pid === 'number') {
-        // Fire-and-forget: backend `kill` removes the session from the
-        // plugin's map, so the next tauri-pty read invoke returns "EOF"
-        // and its internal `for(;;)` loop exits cleanly. Do NOT call
-        // `pty.kill()` here — that version swallows the return value
-        // so we can't discriminate between a real kill and a race.
-        void invoke('plugin:pty|kill', { pid }).catch(() => {
-          // Session may already be gone (e.g. child exited on its own).
-        });
-      }
-      ptyRef.current = null;
-    }
+    ptyRef.current = null;
 
     if (terminalRef.current) {
       terminalRef.current.dispose();
@@ -446,7 +450,8 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     // ~5ms file-exists check.
     let attemptResume = false;
 
-    // Setup PTY connection using tauri-pty with retry logic
+    // Open (or re-attach to) the backend PTY session for this tab.
+    // `retryCount` is used by the resume-failed-then-retry-fresh path.
     const setupPty = async (retryCount = 0) => {
       const maxRetries = 3;
 
@@ -552,8 +557,9 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
           });
         }
 
-        // When autoAcceptMode is enabled, pass the agent's auto-accept flag
-        if (autoAcceptMode && agent.autoAcceptFlag) {
+        // When autoAcceptMode is enabled, pass the agent's auto-accept flag.
+        // Read from the ref so the setup effect doesn't depend on the scalar.
+        if (autoAcceptModeRef.current && agent.autoAcceptFlag) {
           agentArgs.push(agent.autoAcceptFlag);
         }
 
@@ -561,26 +567,51 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         const spawnCmd = isWin ? 'cmd.exe' : agent.binaryName;
         const spawnArgs = isWin ? ['/C', agent.binaryName, ...agentArgs] : agentArgs;
 
-        // eslint-disable-next-line @typescript-eslint/await-thenable
-        const pty = await spawn(spawnCmd, spawnArgs, {
+        // The backend session id is the tab's sessionName UUID — it survives
+        // component unmount/remount and project switches, so attach is
+        // idempotent. `openPtySession` is a no-op if the session is already
+        // alive; it evicts-and-respawns if a previous run exited (retry
+        // path below). `attachPtySession` returns the ring-buffer tail for
+        // xterm to replay before the live stream takes over.
+        const backendSessionId = sessionName || `tab-${Date.now()}`;
+        const opened = await openPtySession({
+          sessionId: backendSessionId,
+          command: spawnCmd,
+          args: spawnArgs,
           cwd: projectPath,
+          env,
           cols: term.cols,
           rows: term.rows,
-          env,
+          projectPath,
+          tabSessionId: sessionName ?? null,
         });
 
-        // Check again after async operation
         if (!mounted) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-          const ppid = (pty as any).pid as number | undefined;
-          if (typeof ppid === 'number') {
-            void invoke('plugin:pty|kill', { pid: ppid }).catch(() => {});
-          }
+          // Unmounted mid-open — leave the PTY alive for the next mount
+          // to attach to. It'll be reaped on explicit close or app quit.
           return;
         }
 
-        ptyRef.current = pty;
-        logger.info('[Terminal] PTY spawned successfully', { agent: agent.id });
+        ptyRef.current = { sessionId: backendSessionId, pid: opened.pid };
+        logger.info('[Terminal] PTY session opened', {
+          agent: agent.id,
+          sessionId: backendSessionId,
+          pid: opened.pid,
+        });
+        onSpawnRef.current?.(opened.pid);
+
+        const attach = await attachPtySession(backendSessionId);
+        if (!mounted) return;
+        if (attach.buffer.length > 0) {
+          // Replay ring-buffer tail so a newly-attached xterm shows prior
+          // output (critical for project switches back to a background tab).
+          terminalRef.current?.write(attach.buffer);
+        }
+        if (!attach.alive) {
+          // Session already exited between open and attach. Treat as a
+          // normal exit so the retry-on-resume-fail path can kick in.
+          onExitRef.current?.(attach.exitCode ?? -1);
+        }
 
         // Startup timeout: if no output is received within 10s, the agent
         // likely failed to launch (binary not found, permission error, etc.).
@@ -602,41 +633,33 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         // Buffer early output to detect resume failures on exit
         let outputBuffer = '';
 
-        // Write data to xterm, or buffer it if the terminal is hidden.
-        // Note: tauri-pty's read command returns Vec<u8> from Rust, which Tauri
-        // serializes as a JSON number[]. We must convert to Uint8Array for both
-        // xterm.write() and TextDecoder.decode() to work.
+        // Stream PTY data directly into xterm, even when the wrapper is
+        // visibility-hidden. xterm needs to process the byte stream (not
+        // just when visible) so `term.onTitleChange` fires for background
+        // tabs — that's what drives the agent-done sound + green-label
+        // notification while the user is on another project.
         const writeToTerminal = (data: string | Uint8Array | number[]) => {
           const normalized = Array.isArray(data) ? new Uint8Array(data) : data;
-          if (isActiveRef.current) {
-            terminalRef.current?.write(normalized);
-          } else {
-            const str =
-              typeof normalized === 'string' ? normalized : new TextDecoder().decode(normalized);
-            hiddenBufferRef.current.push(str);
-            hiddenBufferSizeRef.current += str.length;
-            // Cap buffer to prevent memory growth
-            while (
-              hiddenBufferSizeRef.current > MAX_HIDDEN_BUFFER &&
-              hiddenBufferRef.current.length > 1
-            ) {
-              const removed = hiddenBufferRef.current.shift()!;
-              hiddenBufferSizeRef.current -= removed.length;
-            }
-          }
+          terminalRef.current?.write(normalized);
         };
 
         // Handle PTY output -> terminal
         // Store disposables so cleanup() can remove IPC listeners and prevent CPU leak.
         // For agents without title-based detection, add idle-detection:
         // when output stops flowing for 1.5s after "thinking" state, transition to "waiting".
+        const pushDisposable = (unlisten: UnlistenFn) => {
+          ptyDisposablesRef.current.push({ dispose: () => unlisten() });
+        };
+
         if (!agent.supportsStatusDetection) {
           let idleTimer: ReturnType<typeof setTimeout> | null = null;
-          const dataDisposable = pty.onData((data) => {
+          const unlistenData = await onPtySessionData(backendSessionId, (bytes) => {
             receivedOutput = true;
-            if (outputBuffer.length < 2000) outputBuffer += String(data);
+            if (outputBuffer.length < 2000) {
+              outputBuffer += new TextDecoder().decode(bytes);
+            }
             clearTimeout(startupTimeout);
-            writeToTerminal(data);
+            writeToTerminal(bytes);
             if (lastStatusRef.current === 'thinking') {
               if (idleTimer) clearTimeout(idleTimer);
               idleTimer = setTimeout(() => {
@@ -647,19 +670,21 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
               }, 1500);
             }
           });
-          ptyDisposablesRef.current.push(dataDisposable);
+          pushDisposable(unlistenData);
         } else {
-          const dataDisposable = pty.onData((data) => {
+          const unlistenData = await onPtySessionData(backendSessionId, (bytes) => {
             receivedOutput = true;
-            if (outputBuffer.length < 2000) outputBuffer += String(data);
+            if (outputBuffer.length < 2000) {
+              outputBuffer += new TextDecoder().decode(bytes);
+            }
             clearTimeout(startupTimeout);
-            writeToTerminal(data);
+            writeToTerminal(bytes);
           });
-          ptyDisposablesRef.current.push(dataDisposable);
+          pushDisposable(unlistenData);
         }
 
-        // Handle PTY exit
-        const exitDisposable = pty.onExit(({ exitCode }) => {
+        // Handle PTY exit — subscribe to the backend event stream.
+        const unlistenExit = await onPtySessionExit(backendSessionId, (exitCode) => {
           clearTimeout(startupTimeout);
           logger.info('[Terminal] PTY process exited', {
             agent: agent.id,
@@ -744,11 +769,13 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
           terminalRef.current?.write('\r\n[Process exited]\r\n');
           onExitRef.current?.(exitCode);
         });
-        ptyDisposablesRef.current.push(exitDisposable);
+        pushDisposable(unlistenExit);
 
-        // Handle terminal input -> PTY
+        // Handle terminal input -> PTY. Resolves the session id lazily
+        // from the ref so re-attach doesn't need a new listener.
         const inputDisposable = term.onData((data) => {
-          ptyRef.current?.write(data);
+          const sid = ptyRef.current?.sessionId;
+          if (sid) void writePtySession(sid, data);
           // When user sends input to an agent without title-based status detection,
           // assume it transitions to "thinking" (processing the request).
           if (!agent.supportsStatusDetection && data.includes('\r')) {
@@ -776,7 +803,8 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
             if (event.type === 'keydown') {
               // Send a literal newline character (Ctrl+J / Line Feed)
               // This tells Claude Code to continue on a new line without submitting
-              ptyRef.current?.write('\n');
+              const sid = ptyRef.current?.sessionId;
+              if (sid) void writePtySession(sid, '\n');
             }
             // Prevent both keydown and keypress from being processed
             event.preventDefault();
@@ -810,14 +838,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     // Show a loading message while agent starts up
     term.write(`\r\n  \x1b[2m${agent.loadingMessage}\x1b[0m`);
 
-    // Only spawn PTY when this tab is active to avoid IPC congestion
-    // from multiple concurrent PTY read loops.
-    // If hidden, defer until the tab becomes active.
-    if (isActiveRef.current) {
-      setTimeout(() => void setupPty(), 100);
-    } else {
-      deferredSpawnRef.current = () => setTimeout(() => void setupPty(), 100);
-    }
+    // Spawn eagerly — the PTY read loop lives in Rust, so there's no
+    // per-tab IPC polling to multiply across background sessions. We
+    // *want* background agents running, not waiting on the user to focus.
+    setTimeout(() => void setupPty(), 100);
 
     // Handle resize — debounce with rAF to avoid layout thrashing during drags/animations
     let resizeRaf: number | null = null;
@@ -827,7 +851,8 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         resizeRaf = null;
         if (fitAddonRef.current && terminalRef.current && ptyRef.current) {
           fitAddonRef.current.fit();
-          ptyRef.current.resize(terminalRef.current.cols, terminalRef.current.rows);
+          const { sessionId } = ptyRef.current;
+          void resizePtySession(sessionId, terminalRef.current.cols, terminalRef.current.rows);
         }
       });
     });
@@ -843,7 +868,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       }
       cleanup();
     };
-  }, [isReady, projectPath, cleanup, autoAcceptMode, agent, sessionName, shouldResume]);
+    // `autoAcceptMode` is intentionally omitted — it's read from
+    // `autoAcceptModeRef.current` at spawn time, and changing it must not
+    // tear down an existing PTY (it's a CLI flag baked in at spawn).
+  }, [isReady, projectPath, cleanup, agent, sessionName, shouldResume]);
 
   // Click to focus terminal
   const handleClick = useCallback(() => {
@@ -874,7 +902,8 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         textarea?.focus();
       },
       write: (data: string) => {
-        ptyRef.current?.write(data);
+        const sid = ptyRef.current?.sessionId;
+        if (sid) void writePtySession(sid, data);
       },
       paste: (data: string) => {
         if (terminalRef.current) {
@@ -884,12 +913,18 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         }
       },
       kill: () => {
+        // Imperative kill — used by `closeAllTerminalsForProject` and the
+        // close-tab path. Tell the backend to reap the PTY, then let
+        // cleanup unsubscribe and dispose xterm.
+        const sid = ptyRef.current?.sessionId;
+        if (sid) void killPtySession(sid);
         cleanup();
       },
       fit: () => {
         if (fitAddonRef.current && terminalRef.current && ptyRef.current) {
           fitAddonRef.current.fit();
-          ptyRef.current.resize(terminalRef.current.cols, terminalRef.current.rows);
+          const { sessionId } = ptyRef.current;
+          void resizePtySession(sessionId, terminalRef.current.cols, terminalRef.current.rows);
         }
       },
     }),

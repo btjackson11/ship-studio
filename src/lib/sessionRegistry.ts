@@ -1,27 +1,19 @@
 /**
  * # Session Registry — Frontend
  *
- * Module-level (outside React) registry of live project sessions. The single
- * source of truth for "which projects have a live session in this window."
+ * Module-level (outside React) registry of live project sessions. The
+ * single source of truth in the frontend for "which projects have a live
+ * session in this window." Pairs with the Rust `pty_session` registry,
+ * which owns the actual PTY processes.
  *
  * **Core invariant:** one project path → at most one session, ever.
  *
- * `getOrCreate` is the only path that creates a session. If a session for
- * the path already exists, it returns the existing one. No other code path
- * can bypass this guard. React components remount during HMR, project
- * switches, and state changes — putting the registry outside React means
- * a remount cannot accidentally spawn a second session for the same project
- * (which is how the previous memory leak happened).
- *
- * ## Phased migration
- *
- * Phase 2a (this file, initial version) ships only the data structure and
- * invariant. xterm/PTY ownership migration to the registry happens in
- * Phase 2d-2f, where Terminal.tsx is refactored to attach its xterm to a
- * registry-owned instance instead of owning it itself.
- *
- * Until then, the registry holds metadata only — `status`, `activatedAt`,
- * `unreadCount`, etc. The xterm instances still live in the React tree.
+ * `getOrCreate` is the only path that creates a session. If a session
+ * already exists for the path, it's returned unchanged. No other code
+ * path can bypass this guard. React components remount during HMR,
+ * project switches, and state changes — keeping the registry outside
+ * React guarantees a remount cannot accidentally spawn a second session
+ * for the same project.
  *
  * @module lib/sessionRegistry
  */
@@ -38,16 +30,53 @@ export type SessionStatus = 'active' | 'suspended' | 'error';
 export type AgentActivityStatus = 'thinking' | 'waiting' | 'idle';
 
 /**
+ * Runtime status of a single agent/terminal tab. Derived from explicit
+ * lifecycle events — spawn, exit, title-based activity — never from
+ * "whether it's the selected tab". A non-selected-but-running tab is
+ * `running`, not `idle`. Crash vs. clean exit is kept distinct because
+ * the UX differs.
+ */
+export type TabStatus = 'starting' | 'running' | 'thinking' | 'waiting' | 'exited' | 'crashed';
+
+/**
+ * A single terminal tab belonging to a project's session. This is the
+ * registry's view of the tab — enough to rehydrate the tab bar and sidebar
+ * when we switch back to the project. The live PTY is owned by the Rust
+ * registry (`pty_session.rs`); this struct carries the metadata that drives
+ * the sidebar's rendering.
+ */
+export interface SessionTerminalTab {
+  readonly id: number;
+  readonly agentId: string;
+  readonly sessionId: string;
+  /** Last-seen PTY title (for sidebar display when the xterm is unmounted). */
+  title?: string;
+  /** Whether this tab has an attention indicator on the sidebar. */
+  attention?: boolean;
+  /** Authoritative lifecycle status. Undefined = we haven't heard from
+   *  Terminal yet (treat as `starting`). Updated by Terminal's spawn/exit
+   *  callbacks and by agent-activity status parsing. */
+  status?: TabStatus;
+  /** OS process id of the backing PTY. Null before spawn and after exit. */
+  pid?: number | null;
+  /** Exit code captured by `onExit`. Present iff status is `exited` or
+   *  `crashed`. Non-zero typically means `crashed`. */
+  exitCode?: number | null;
+  /** Unix millis of the most recent status update for this tab. */
+  lastActivityAt?: number;
+}
+
+/**
  * In-memory state for a single project session.
  *
- * Notes on ownership (subject to expansion in Phase 2d-2f):
+ * Ownership split:
  *
  * - `status` / `activatedAt` / `lastFocusedAt` / `unreadCount` /
- *   `lastAgentStatus`: owned by the registry from day one.
- * - xterm instances, PTY refs, hidden buffers, dev server handle:
- *   currently still owned by React components (Terminal.tsx, useDevServer).
- *   The registry keeps the slot reserved so when ownership migrates, the
- *   data has a home.
+ *   `lastAgentStatus` / `terminalTabs`: owned by this registry.
+ * - Live PTY handles: owned by the Rust `pty_session` registry, keyed
+ *   by `tab.sessionId`.
+ * - xterm instances + dev server handles: owned by React components
+ *   (Terminal.tsx, useDevServer) while mounted.
  */
 export interface ProjectSession {
   /** Canonical absolute path to the project directory. */
@@ -65,6 +94,15 @@ export interface ProjectSession {
   lastFocusedAt: number;
   /** Last known memory usage in bytes (polled from backend). */
   memoryBytes: number;
+  /**
+   * Last-known terminal tabs for this project. Populated from the backend's
+   * persisted `set_terminal_state` when the project is registered, and kept
+   * in sync as the user spawns/closes tabs. Read by the sidebar so non-
+   * current projects can show their tab list without having to switch.
+   */
+  terminalTabs: SessionTerminalTab[];
+  /** Index into `terminalTabs` that should be active on next mount. */
+  activeTabIndex: number;
 }
 
 /** Diff-friendly snapshot used by the rail UI subscription. */
@@ -76,6 +114,8 @@ export interface SessionSnapshot {
   readonly activatedAt: number;
   readonly lastFocusedAt: number;
   readonly memoryBytes: number;
+  readonly terminalTabs: ReadonlyArray<SessionTerminalTab>;
+  readonly activeTabIndex: number;
 }
 
 /**
@@ -98,6 +138,19 @@ export type SessionSubscriber = (
 class SessionRegistry {
   private readonly sessions = new Map<string, ProjectSession>();
   private readonly subscribers = new Set<SessionSubscriber>();
+  /** Monotonic version bumped on every notify — lets React's
+   *  `useSyncExternalStore` detect changes without snapshot equality. */
+  private version = 0;
+
+  /** Current store version (stable until the next `notify`). */
+  getVersion(): number {
+    return this.version;
+  }
+
+  /** `useSyncExternalStore`-compatible subscribe adapter. */
+  subscribeSimple = (callback: () => void): (() => void) => {
+    return this.subscribe(() => callback());
+  };
 
   /**
    * Look up a session by path.
@@ -137,6 +190,8 @@ class SessionRegistry {
       activatedAt: now,
       lastFocusedAt: now,
       memoryBytes: 0,
+      terminalTabs: [],
+      activeTabIndex: 0,
     };
     this.sessions.set(projectPath, session);
     logger.info('[SessionRegistry] Created session', { projectPath });
@@ -177,9 +232,8 @@ class SessionRegistry {
   }
 
   /**
-   * Remove a session entirely. Used when the project is unpinned.
-   * In Phase 2d+, this will also be the place that disposes xterm/PTY.
-   * Idempotent.
+   * Remove a session entirely. Called when the project is explicitly
+   * closed from the sidebar. Idempotent.
    */
   destroy(projectPath: string): void {
     const removed = this.sessions.delete(projectPath);
@@ -191,7 +245,7 @@ class SessionRegistry {
 
   /**
    * Bump `lastFocusedAt`. Cheap, idempotent within the same millisecond.
-   * Call on terminal input, focus, etc. Drives LRU eviction in Phase 5.
+   * Call on terminal input, focus, etc.
    */
   touch(projectPath: string): void {
     const session = this.sessions.get(projectPath);
@@ -232,6 +286,123 @@ class SessionRegistry {
     if (session.memoryBytes === bytes) return;
     session.memoryBytes = bytes;
     this.notify(projectPath);
+  }
+
+  /**
+   * Replace the cached terminal-tab list for a project. Called when:
+   * - A project is first loaded and its persisted tabs are hydrated.
+   * - The user spawns, closes, or swaps the agent on a tab.
+   * - The user switches to another project (outgoing snapshot).
+   *
+   * Auto-creates the session entry if missing — safer than requiring
+   * consumers to chain `getOrCreate` first, which they often forget.
+   */
+  setTerminalTabs(
+    projectPath: string,
+    tabs: ReadonlyArray<SessionTerminalTab>,
+    activeTabIndex: number
+  ): void {
+    const session = this.sessions.get(projectPath) ?? this.getOrCreate(projectPath);
+    // Preserve `title` and `attention` from the existing snapshot when the
+    // caller (useTerminalManagement) doesn't include them. Otherwise every
+    // tab mutation — add, close, switch agent — would wipe the PTY-reported
+    // title mid-session.
+    const byId = new Map<number, SessionTerminalTab>();
+    for (const t of session.terminalTabs) byId.set(t.id, t);
+    session.terminalTabs = tabs.map((t) => {
+      const prev = byId.get(t.id);
+      if (!prev) return { ...t };
+      // sessionId changes when the tab's agent is switched. Drop the
+      // title/attention/status carried over from the previous agent so the
+      // new Terminal starts with a clean slate and re-emits its own state.
+      const agentChanged = prev.sessionId !== t.sessionId;
+      return {
+        ...t,
+        title: t.title ?? (agentChanged ? undefined : prev.title),
+        attention: t.attention ?? (agentChanged ? undefined : prev.attention),
+        status: t.status ?? (agentChanged ? 'starting' : prev.status),
+        pid: t.pid ?? (agentChanged ? null : prev.pid),
+        exitCode: t.exitCode ?? (agentChanged ? null : prev.exitCode),
+        lastActivityAt: t.lastActivityAt ?? (agentChanged ? Date.now() : prev.lastActivityAt),
+      };
+    });
+    session.activeTabIndex = Math.max(0, Math.min(activeTabIndex, tabs.length - 1));
+    this.notify(projectPath);
+  }
+
+  /** Update a single tab's title (e.g. after a PTY title-change event). */
+  setTerminalTabTitle(projectPath: string, tabId: number, title: string): void {
+    const session = this.sessions.get(projectPath);
+    if (!session) return;
+    let changed = false;
+    session.terminalTabs = session.terminalTabs.map((tab) => {
+      if (tab.id === tabId && tab.title !== title) {
+        changed = true;
+        return { ...tab, title };
+      }
+      return tab;
+    });
+    if (changed) this.notify(projectPath);
+  }
+
+  /** Mark/clear the attention indicator on a specific tab. */
+  setTerminalTabAttention(projectPath: string, tabId: number, attention: boolean): void {
+    const session = this.sessions.get(projectPath);
+    if (!session) return;
+    let changed = false;
+    session.terminalTabs = session.terminalTabs.map((tab) => {
+      if (tab.id === tabId && (tab.attention ?? false) !== attention) {
+        changed = true;
+        return { ...tab, attention };
+      }
+      return tab;
+    });
+    if (changed) this.notify(projectPath);
+  }
+
+  /**
+   * Record a lifecycle update for a tab. Any subset of fields can be
+   * patched in a single call; whatever isn't provided is left unchanged.
+   * Bumps `lastActivityAt` to now on every call. Single entry point for
+   * every runtime source (Terminal spawn/exit, title-based activity
+   * parsing) — keeps the sidebar's derived state consistent.
+   */
+  patchTerminalTab(
+    projectPath: string,
+    tabId: number,
+    patch: {
+      status?: TabStatus;
+      pid?: number | null;
+      exitCode?: number | null;
+      bumpActivity?: boolean;
+    }
+  ): void {
+    const session = this.sessions.get(projectPath);
+    if (!session) return;
+    let changed = false;
+    const now = Date.now();
+    session.terminalTabs = session.terminalTabs.map((tab) => {
+      if (tab.id !== tabId) return tab;
+      const next: SessionTerminalTab = { ...tab };
+      if (patch.status !== undefined && tab.status !== patch.status) {
+        next.status = patch.status;
+        changed = true;
+      }
+      if (patch.pid !== undefined && tab.pid !== patch.pid) {
+        next.pid = patch.pid;
+        changed = true;
+      }
+      if (patch.exitCode !== undefined && tab.exitCode !== patch.exitCode) {
+        next.exitCode = patch.exitCode;
+        changed = true;
+      }
+      if (patch.bumpActivity !== false) {
+        next.lastActivityAt = now;
+        changed = true;
+      }
+      return next;
+    });
+    if (changed) this.notify(projectPath);
   }
 
   /** Snapshot of a single session for subscribers / equality checks. */
@@ -276,6 +447,7 @@ class SessionRegistry {
   }
 
   private notify(changedPath: string | null): void {
+    this.version += 1;
     if (this.subscribers.size === 0) return;
     const snapshots = this.snapshotAll();
     for (const subscriber of this.subscribers) {
@@ -297,6 +469,8 @@ function toSnapshot(session: ProjectSession): SessionSnapshot {
     activatedAt: session.activatedAt,
     lastFocusedAt: session.lastFocusedAt,
     memoryBytes: session.memoryBytes,
+    terminalTabs: session.terminalTabs.slice(),
+    activeTabIndex: session.activeTabIndex,
   };
 }
 

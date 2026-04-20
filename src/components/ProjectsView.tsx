@@ -12,7 +12,6 @@ import { ProjectList } from './ProjectList';
 import { CreateProject } from './CreateProject';
 import { ImportProject } from './ImportProject';
 import { ImportTypePicker } from './ImportTypePicker';
-import { Changelog } from './Changelog';
 import { PluginSlot } from './PluginSlot';
 import { UpdateBanner } from './UpdateBanner';
 import { OnboardingTerminal } from './setup';
@@ -109,7 +108,6 @@ export const ProjectsView = memo(function ProjectsView({
             pinnedSet={pinnedSet}
             onTogglePin={onTogglePin}
           />
-          {!projectsLoading && <Changelog />}
           {!projectsLoading && (
             <PluginSlot
               name="sidebar"
