@@ -403,18 +403,33 @@ function formatElementsForAgent(snapshot: DomSnapshot | null): string {
   return `${header}\n\n\`\`\`html\n${buf.join('\n')}\n\`\`\``;
 }
 
+/* Escape for HTML text context: & < > so a literal `<script>` or
+   `a && b` in page content doesn't produce invalid markup when the
+   agent re-parses what we send. */
+function escapeHtmlText(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/* Escape for HTML attribute-value context (double-quoted). & and "
+   are required by spec; < is belt-and-suspenders. */
+function escapeHtmlAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
 function serializeDomForAgent(node: DomNode, depth: number, out: string[]): void {
   const pad = '  '.repeat(depth);
   if (node.kind === 'text') {
-    if (node.text.trim()) out.push(pad + node.text);
+    if (node.text.trim()) out.push(pad + escapeHtmlText(node.text));
     return;
   }
   if (node.kind === 'comment') {
-    out.push(`${pad}<!-- ${node.text} -->`);
+    // `-->` inside a comment would terminate it prematurely; neutralize.
+    const safe = node.text.replace(/-->/g, '-- >');
+    out.push(`${pad}<!-- ${safe} -->`);
     return;
   }
   const attrs = Object.entries(node.attrs)
-    .map(([k, v]) => `${k}="${v}"`)
+    .map(([k, v]) => `${k}="${escapeHtmlAttr(v)}"`)
     .join(' ');
   const open = attrs ? `<${node.tag} ${attrs}>` : `<${node.tag}>`;
   if (VOID_ELEMENTS.has(node.tag)) {
