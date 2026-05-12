@@ -25,6 +25,17 @@ interface ChangelogEntry {
 // Keep ~15 most recent versions for the sidebar
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.6.3', // v0.6.3
+    items: [
+      'Side-by-side agents — in focus mode with two or more agents on a project, toggle "Split" in the terminal toolbar to view them side by side. Drag the handle between panes to resize. Click a pane to make it the active one',
+      'Open in Browser fix — Preview toolbar\'s "Open in Browser" now opens your real dev server URL (e.g. `localhost:3000`) instead of Ship Studio\'s internal proxy port',
+      'Auto-accept on resume — resumed sessions now apply auto-accept mode correctly on startup; a race could previously cause it to silently turn off',
+      'Sync dropdown polish — no longer shows the stale "All changes synced — Done" view after dismissing it without clicking Done',
+      'Agent Settings dropdown stays on-screen in focus mode — previously the menu could be cut off on the right',
+      'Modal header padding — Skills, MCP, Help, and Project Settings modals no longer have their first row of content touching the header border',
+    ],
+  },
+  {
     version: '0.6.2', // v0.6.2
     items: [
       'Undo/Redo (⌘Z / ⌘⇧Z) — every burst of edits gets snapshotted as a git stash so you can roll the working tree back, even on work the agent never committed. Toast confirms "Undid 3 files: App.tsx, Preview.tsx +1 more". Buttons grey out at the edge of history. Native character-undo still wins inside text inputs',
