@@ -6,6 +6,15 @@ The latest entry is rendered inside the in-app update dialog, so write user-
 facing language — what changed, in plain English — not commit subjects.
 -->
 
+## What's New in v0.6.6
+
+- **Responsive breakpoint editing** - Edit Tailwind classes per breakpoint in the visual editor; the preview canvas resizes to match and edits preview truthfully across widths
+- **Many more controls + Custom CSS** - Collapsible sections covering size, layout, typography, borders, and effects, plus a custom box that turns any `property: value` into a real Tailwind arbitrary-property class
+- **Astro support** - The visual editor now works on Astro + Tailwind sites, not just Next.js/React
+- **Free-form values, floating Reset & shared-component scope** - Type exact lengths in any field, reset a value from a floating button at your cursor, and see where a shared component is used with click-through to the source
+- **Auto-save toggle & hidden preview scrollbars**
+
+
 ## What's New in v0.6.5
 
 - **Visual editor (Beta)** - Toggle "Edit (Beta)" in the preview to click any element and fine-tune its Tailwind classes visually — padding/margin (drag-to-scrub box model), gap, alignment, size, weight, radius, display, flex, border, and opacity — with instant live preview and one-click Save to source.
