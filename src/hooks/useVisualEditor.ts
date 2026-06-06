@@ -157,12 +157,19 @@ export function useVisualEditor({
   // the ss:textCommit handler reads the latest without re-subscribing. `text` is the
   // source baseline used as the drift guard on write-back.
   const [textResolution, setTextResolution] = useState<TextResolution | null>(null);
-  const textTargetRef = useRef<{ file: string; line: number; text: string } | null>(null);
+  const textTargetRef = useRef<{ file: string; line: number; column: number; text: string } | null>(
+    null
+  );
   const setTextTarget = useCallback((res: TextResolution | null) => {
     textTargetRef.current =
-      res?.status === 'resolved' ? { file: res.file, line: res.line, text: res.text } : null;
+      res?.status === 'resolved'
+        ? { file: res.file, line: res.line, column: res.column, text: res.text }
+        : null;
     setTextResolution(res);
   }, []);
+  // The signature of the current selection, mirrored for on-demand text resolution if
+  // a commit arrives before the (async) select-time resolve has landed.
+  const selectedSigRef = useRef<ElementSignature | null>(null);
 
   const post = useCallback(
     (msg: unknown) => iframeRef.current?.contentWindow?.postMessage(msg, '*'),
@@ -197,15 +204,35 @@ export function useVisualEditor({
 
       // Inline text edit was confirmed in the iframe — write the new text to source.
       if (d.type === 'ss:textCommit' && typeof d.text === 'string') {
-        const target = textTargetRef.current;
-        if (!target) return;
         const next = d.text;
-        if (next === target.text) return; // unchanged
+        const sig = selectedSigRef.current;
         // Arm reload suppression before writing (same reasoning as a class commit).
         post({ type: 'ss:suppressReload' });
         void (async () => {
           try {
-            await applyTextEdit(projectPath, target.file, target.line, target.text, next);
+            // The select-time resolve may not have landed yet (fast double-click →
+            // type → commit); resolve on demand so the edit is never dropped silently.
+            let target = textTargetRef.current;
+            if (!target) {
+              if (!sig) throw new Error('Lost track of this element — reselect it and try again.');
+              const res = await resolveTextSource(projectPath, sig);
+              if (res.status !== 'resolved')
+                throw new Error(res.reason || 'This text isn’t editable.');
+              target = { file: res.file, line: res.line, column: res.column, text: res.text };
+              textTargetRef.current = target;
+            }
+            if (next === target.text) {
+              post({ type: 'ss:commit' }); // unchanged — just re-baseline, no write
+              return;
+            }
+            await applyTextEdit(
+              projectPath,
+              target.file,
+              target.line,
+              target.column,
+              target.text,
+              next
+            );
             // Advance the drift baseline so consecutive text edits keep working.
             target.text = next;
             setTextResolution((prev) =>
@@ -227,6 +254,7 @@ export function useVisualEditor({
       const sig = d.signature;
       const instanceCount = d.count ?? 1;
       const leafText = !!d.leafText;
+      selectedSigRef.current = sig;
       setSelection({ signature: sig, resolution: null, instanceCount });
       setLiveClass(sig.className);
       setMultiTarget('all'); // a fresh selection defaults to editing all occurrences
@@ -434,6 +462,7 @@ export function useVisualEditor({
         setSelection(null);
         setLiveClass('');
         setTextTarget(null);
+        selectedSigRef.current = null;
       }
       return !prev;
     });

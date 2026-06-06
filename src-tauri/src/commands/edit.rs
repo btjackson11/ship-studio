@@ -609,9 +609,9 @@ struct TagInfo {
     self_closing: bool,
 }
 
-/// Parse the tag beginning at byte `at` (which must be `<`). Naive `>`-terminated
-/// scan — fine for the inline tags we allow (their attribute values never contain a
-/// raw `>`). None if it isn't a well-formed tag start.
+/// Parse the tag beginning at byte `at` (which must be `<`). The closing `>` is
+/// found quote-aware, so a `>` inside an attribute value (`<a title="a > b">`)
+/// doesn't truncate the tag. None if it isn't a well-formed tag start.
 fn tag_at(src: &str, at: usize) -> Option<TagInfo> {
     let bytes = src.as_bytes();
     if bytes.get(at) != Some(&b'<') {
@@ -630,7 +630,25 @@ fn tag_at(src: &str, at: usize) -> Option<TagInfo> {
         return None; // not a tag (e.g. `<` in text — but JSX text rarely has bare `<`)
     }
     let name = src[name_start..i].to_ascii_lowercase();
-    let gt = src[i..].find('>')? + i;
+    // Find the tag's `>`, skipping any inside quoted attribute values.
+    let mut k = i;
+    let mut quote: u8 = 0;
+    let mut gt = None;
+    while k < bytes.len() {
+        let b = bytes[k];
+        if quote != 0 {
+            if b == quote {
+                quote = 0;
+            }
+        } else if b == b'"' || b == b'\'' {
+            quote = b;
+        } else if b == b'>' {
+            gt = Some(k);
+            break;
+        }
+        k += 1;
+    }
+    let gt = gt?;
     let self_closing = gt > 0 && bytes[gt - 1] == b'/';
     Some(TagInfo {
         name,
@@ -665,6 +683,9 @@ fn scan_inner(src: &str, run_start: usize) -> Option<(String, usize, usize)> {
                 } else {
                     if !INLINE_TAGS.contains(&t.name.as_str()) {
                         return None; // a block/other element → mixed content
+                    }
+                    if src[j..t.end].contains('{') {
+                        return None; // dynamic attribute (e.g. <a href={url}>) — not static
                     }
                     if t.name != "br" && !t.self_closing {
                         depth += 1;
@@ -1034,22 +1055,25 @@ fn has_illegal_markup(s: &str) -> bool {
 }
 
 /// Surgically replace one static text run's value, after verifying the current text
-/// still equals `old_text` (drift guard). Only the trimmed run is touched —
-/// surrounding whitespace and the rest of the file are preserved byte-for-byte.
-/// Allows plain text and `<br>` line breaks; rejects other markup.
+/// still equals `old_text` (drift guard). The `column` pins the exact run when an
+/// identical text appears more than once on the same line. Only the trimmed run is
+/// touched — surrounding whitespace and the rest of the file are preserved byte-for-
+/// byte. Allows plain text, `<br>` line breaks, and inline formatting; rejects other markup.
 #[tauri::command]
 #[tracing::instrument(fields(project = %project_path, file = %file, line = line))]
 pub fn apply_text_edit(
     project_path: String,
     file: String,
     line: usize,
+    column: usize,
     old_text: String,
     new_text: String,
 ) -> Result<(), CommandError> {
     if has_illegal_markup(&new_text) {
         return Err(CommandError::Validation {
             field: "new_text".into(),
-            reason: "Text can only contain plain text and <br> line breaks.".into(),
+            reason: "Text can only contain plain text, line breaks, and basic formatting (bold, italic, links)."
+                .into(),
         });
     }
     let root = validate_project_path(&project_path)?;
@@ -1067,7 +1091,7 @@ pub fn apply_text_edit(
     let src = std::fs::read_to_string(&abs).map_err(CommandError::from)?;
     let span = find_text_spans(&src)
         .into_iter()
-        .find(|s| s.line == line && s.value == old_text)
+        .find(|s| s.line == line && s.column == column && s.value == old_text)
         .ok_or_else(|| CommandError::Validation {
             field: "old_text".into(),
             reason: "source no longer matches — reselect the element".into(),
@@ -1855,6 +1879,19 @@ const items = [];
         let nested =
             text_after_class("<p className=\"a\"><strong>Bold <em>both</em></strong></p>").unwrap();
         assert_eq!(nested.value, "<strong>Bold <em>both</em></strong>");
+    }
+
+    #[test]
+    fn text_run_rejects_inline_tag_with_dynamic_attr() {
+        // A dynamic href inside an inline tag would be clobbered on save — refuse it.
+        assert!(text_after_class("<p className=\"a\">See <a href={url}>docs</a></p>").is_none());
+    }
+
+    #[test]
+    fn tag_parsing_is_quote_aware() {
+        // A `>` inside an attribute value must not truncate the tag.
+        let ts = text_after_class("<p className=\"a\"><a title=\"a > b\">x</a></p>").unwrap();
+        assert_eq!(ts.value, "<a title=\"a > b\">x</a>");
     }
 
     #[test]

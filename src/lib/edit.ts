@@ -88,15 +88,17 @@ export function resolveTextSource(
   return invoke<TextResolution>('resolve_text_source', { projectPath, signature });
 }
 
-/** Surgically replace one static text run, verifying it still equals `oldText`. */
+/** Surgically replace one static text run, verifying it still equals `oldText`.
+ *  `column` pins the exact run when identical text repeats on the same line. */
 export function applyTextEdit(
   projectPath: string,
   file: string,
   line: number,
+  column: number,
   oldText: string,
   newText: string
 ): Promise<void> {
-  return invoke('apply_text_edit', { projectPath, file, line, oldText, newText });
+  return invoke('apply_text_edit', { projectPath, file, line, column, oldText, newText });
 }
 
 // ───────────────────────────── Breakpoints ──────────────────────────────────

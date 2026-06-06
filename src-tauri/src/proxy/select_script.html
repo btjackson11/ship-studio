@@ -22,6 +22,9 @@ var pvDecls={},curMark=null,pendingMark=null,pvId=0,styleEl=null;
    until ss:textInfo arrives — commit re-validates anyway). last* keep a one-deep
    handle so the parent can revert if the source write is rejected. */
 var txtEditing=false,txtEl=null,txtOrig='',txtOrigHtml='',txtEditable=true,lastTxtEl=null,lastTxtHtml='';
+/* Cap on the text we report for content-search resolution — generous enough for real
+   headings/paragraphs; longer text falls back to class-anchored resolution. */
+var SS_TEXT_CAP=2000;
 function mk(c){var d=document.createElement('div');d.style.cssText='position:fixed;pointer-events:none;z-index:2147483646;border:2px solid '+c+';box-sizing:border-box;border-radius:2px';d.setAttribute('data-ss-overlay','1');document.body.appendChild(d);return d;}
 function ensureHover(){if(!hoverBox)hoverBox=mk('rgba(96,165,250,.8)');}
 function ensureSel(n){while(selBoxes.length<n)selBoxes.push(mk('rgba(217,119,87,.95)'));}
@@ -36,7 +39,7 @@ function matching(el){var c=el.getAttribute('class');if(!c||!c.trim())return [el
    top-level rules only (descends media/supports and non-layered @imports, but skips
    @layer blocks — i.e. all the Tailwind utilities). Cross-origin sheets throw → skipped. */
 function uLayered(el){var props={};function scan(rules){for(var i=0;i<rules.length;i++){var r=rules[i];if(r.type===1){try{if(el.matches(r.selectorText)){var st=r.style;for(var j=0;j<st.length;j++)props[st[j]]=1;}}catch(e){}}else if(r.cssRules&&!(r.constructor&&r.constructor.name==='CSSLayerBlockRule')){try{scan(r.cssRules);}catch(e){}}else if(r.type===3&&r.styleSheet&&r.layerName==null){try{scan(r.styleSheet.cssRules);}catch(e){}}}}var s=document.styleSheets;for(var i=0;i<s.length;i++){try{var rr=s[i].cssRules;if(rr)scan(rr);}catch(e){}}var out=[];for(var k in props)out.push(k);return out;}
-function sig(el){var anc=[],p=el.parentElement,n=0;while(p&&p!==document.body&&n<8){var c=p.getAttribute('class');if(c&&c.trim()){anc.push(c);n++;}p=p.parentElement;}var r=el.getBoundingClientRect();var cs=getComputedStyle(el);return{className:el.getAttribute('class')||'',tagName:(el.tagName||'').toLowerCase(),text:(el.innerText||el.textContent||'').trim().slice(0,400),ancestorClasses:anc,rect:{top:r.top,left:r.left,width:r.width,height:r.height},computedColor:cs.color,computedBackgroundColor:cs.backgroundColor,unlayeredProps:uLayered(el)};}
+function sig(el){var anc=[],p=el.parentElement,n=0;while(p&&p!==document.body&&n<8){var c=p.getAttribute('class');if(c&&c.trim()){anc.push(c);n++;}p=p.parentElement;}var r=el.getBoundingClientRect();var cs=getComputedStyle(el);return{className:el.getAttribute('class')||'',tagName:(el.tagName||'').toLowerCase(),text:(el.innerText||el.textContent||'').trim().slice(0,SS_TEXT_CAP),ancestorClasses:anc,rect:{top:r.top,left:r.left,width:r.width,height:r.height},computedColor:cs.color,computedBackgroundColor:cs.backgroundColor,unlayeredProps:uLayered(el)};}
 function ensureStyle(){if(!styleEl){styleEl=document.createElement('style');styleEl.id='ss-preview';document.head.appendChild(styleEl);}return styleEl;}
 /* Build the preview CSS for one selection from its accumulated decls: base (minPx 0)
    as a bare rule, variants wrapped in @media, emitted ascending by minPx so a larger
@@ -218,8 +221,9 @@ document.addEventListener('focusout',function(e){if(!txtEditing||e.target!==txtE
 document.addEventListener('mousedown',function(e){if(!txtEditing)return;if(txtEl&&txtEl.contains(e.target))return;if(fmtBar&&fmtBar.contains(e.target))return;endText(true);},true);
 /* Block characters that would break JSX/Astro markup before they're typed. */
 document.addEventListener('beforeinput',function(e){if(txtEditing&&e.data&&/[<{]/.test(e.data))e.preventDefault();},true);
-/* Paste as plain text — rich contentEditable would otherwise inject foreign markup. */
-document.addEventListener('paste',function(e){if(!txtEditing)return;e.preventDefault();var t=(e.clipboardData||window.clipboardData).getData('text/plain');if(t)document.execCommand('insertText',false,t);},true);
+/* Paste as plain text, stripping the two chars that would break JSX/Astro markup
+   (rather than dropping the whole paste). */
+document.addEventListener('paste',function(e){if(!txtEditing)return;e.preventDefault();var t=((e.clipboardData||window.clipboardData).getData('text/plain')||'').replace(/[<{]/g,'');if(t)document.execCommand('insertText',false,t);},true);
 /* Keep the blue editing box sized to the element, and reposition the format bubble. */
 document.addEventListener('input',function(){if(txtEditing){place(hoverBox,txtEl);updateFmtBar();}},true);
 document.addEventListener('selectionchange',function(){if(txtEditing)updateFmtBar();});
