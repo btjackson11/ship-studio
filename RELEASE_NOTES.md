@@ -6,6 +6,16 @@ The latest entry is rendered inside the in-app update dialog, so write user-
 facing language — what changed, in plain English — not commit subjects.
 -->
 
+## What's New in v0.6.8
+
+- **Inline text editing in the visual editor** - Double-click any text on the page to rewrite it right there, Webflow-style. Select text to make it bold, italic, or a link, and press Enter for a line break. Works the same on Next.js and Astro, saves to your source, and is free (0 tokens).
+- **Dynamic text → agent hand-off** - When text comes from your code or data and can't be edited inline, the panel gives you a one-click "Copy request for your agent" to paste into the terminal.
+- **Clearer selection** - The element you're editing is outlined in blue; other same-source elements an edit will also change are outlined in orange.
+- **Fix: dev server restart no longer crashes the app** - Restarting the dev server was killing Ship Studio's own preview (WebKit) process on some setups.
+- **Dev server wait screen is no longer a black box** - Stop waiting instantly, read live dev-server logs inline, or hand the stuck server to your agent with "Fix with agent".
+- **Fix: branch cleanup after merge** - Merged branches now delete correctly even when GitHub auto-deletes the head branch.
+
+
 ## What's New in v0.6.7
 
 - **Visual editor works on Astro + Tailwind** - Edit pages built with custom CSS classes too; edits win the cascade and save to your .astro source. The editor only appears when Tailwind is actually set up in the project
