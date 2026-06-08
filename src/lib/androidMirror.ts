@@ -13,9 +13,11 @@
  * prefixed samples, not in-band start codes. So we parse SPS/PPS, build the
  * `avcC`, and strip start codes — the portable path across WebKit and Chromium.
  *
- * The parsing/packaging functions are pure and unit-tested in `androidMirror.test.ts`;
- * the full decode path is validated against a real screenrecord capture in a
- * headless-Chromium harness.
+ * The parsing/packaging functions are pure and unit-tested in `androidMirror.test.ts`,
+ * and cross-checked against real screenrecord captures (a static frame and a 2MB
+ * motion capture: SPS/PPS/IDR + 218 P-frames classified correctly, codec
+ * `avc1.42c029`, AVCC length prefixes exact). The WebCodecs `decode()` call itself
+ * is verified live in WebKit once this is wired into {@link DeviceMirror}.
  *
  * @module lib/androidMirror
  */
