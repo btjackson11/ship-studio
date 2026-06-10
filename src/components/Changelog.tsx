@@ -25,6 +25,18 @@ interface ChangelogEntry {
 // Keep ~15 most recent versions for the sidebar
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.7.0', // v0.7.0
+    items: [
+      'Mobile app previews — open a React Native, Expo, or Flutter project and the preview pane becomes a real, interactive device. Ship Studio boots an iOS Simulator or Android emulator for you, builds and launches your app onto it (with the build log streaming in), and mirrors the screen live so you can tap, swipe, and type right in the workspace',
+      'Android runs on a low-latency scrcpy stream with the server bundled — no extra install needed. Projects that target both platforms get an iOS | Android picker in the preview toolbar',
+      'No Xcode or Android SDK yet? A “Set up with AI” hand-off sends your agent a detailed install prompt instead of dead-ending you with manual steps. (Mobile previews are macOS-only for now)',
+      'Multilingual sites — Cmd+K → “Languages” to add languages to any Next.js or Astro site. Search every language (not a preset list), pick a default, and Ship Studio edits your i18n config surgically — it never guesses, and unusual configs fall back to a “Fix with AI” hand-off instead of being overwritten',
+      'One-click “Save & translate with AI” — review the exact translation prompt, then copy it or paste it straight into your agent’s terminal. App Router projects get a guided next-intl setup the same way',
+      'Preview in any language — a globe switcher appears in the preview toolbar once you have 2+ languages, and switching pages keeps the language you’re viewing. Removing a language warns about leftover translated files and offers an AI cleanup prompt',
+      'The preview toolbar’s “Open in Browser” button is now just “Open”',
+    ],
+  },
+  {
     version: '0.6.8', // v0.6.8
     items: [
       'Inline text editing in the visual editor — double-click any text on the page to rewrite it right there, Webflow-style. Select text to make it bold, italic, or a link (with an inline URL field), and press Enter for a line break. Works the same on Next.js and Astro, saves straight to your source, and is free (0 tokens)',
