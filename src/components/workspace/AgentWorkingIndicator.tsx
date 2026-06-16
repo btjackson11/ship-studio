@@ -45,8 +45,8 @@ export function AgentWorkingIndicator({ projectPath, tabId }: AgentWorkingIndica
 
   if (!visible) return null;
   return (
-    <div className="terminal-agent-working" role="status">
-      <Spinner size="sm" />
+    <div className="terminal-agent-working" role="status" aria-live="polite">
+      <Spinner size="sm" aria-hidden="true" />
       <span>Agent is working…</span>
     </div>
   );
