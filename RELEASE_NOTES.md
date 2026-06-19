@@ -6,6 +6,11 @@ The latest entry is rendered inside the in-app update dialog, so write user-
 facing language — what changed, in plain English — not commit subjects.
 -->
 
+## What's New in v0.9.0
+
+- **Custom classes** - A Webflow-style, Tailwind-native class system in the visual editor: create a reusable class from an element's styles, apply or remove classes, and edit a class once to update every element using it.
+
+
 ## What's New in v0.8.2
 
 - **Preview reliability** - Live preview now opens reliably on slow-compiling dev servers (Next.js 16 / Turbopack) instead of getting stuck on "Stopped waiting". **Edit panel scroll** - The pinned visual editor panel now scrolls when its content is tall.
