@@ -396,6 +396,17 @@
   color: var(--action-text);
 }
 
+/* Per-section "N properties set" badge — title and count group left, chevron
+ * stays right (the row is space-between). */
+.ss-css-section-count {
+  margin-right: auto;
+  margin-left: 8px;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--action);
+}
+
 /* Accordion: space the section cards apart (they're bordered cards, like the
  * Tailwind editor) and leave room before the add-property row. */
 .ss-css-sections {

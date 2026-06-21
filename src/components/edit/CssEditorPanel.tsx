@@ -263,6 +263,16 @@ export function CssEditorPanel({
   const classes = (selection?.signature.className ?? '').split(/\s+/).filter(Boolean);
   const activeClass = targetClass ?? (classes.length ? classes[classes.length - 1] : null);
 
+  // How many of the rule's declarations fall in each category (the per-section
+  // "N properties set" badge).
+  const categoryCounts: Record<string, number> = {};
+  if (res?.status === 'resolved') {
+    for (const d of res.declarations) {
+      const cat = PROP_TO_CATEGORY[d.property.toLowerCase()];
+      if (cat) categoryCounts[cat] = (categoryCounts[cat] ?? 0) + 1;
+    }
+  }
+
   return (
     <div
       ref={rootRef}
@@ -411,6 +421,9 @@ export function CssEditorPanel({
                       <summary className="ss-edit-panel__section-head">
                         <span className="ss-edit-panel__section-row">
                           <span className="ss-edit-panel__section-title">{cat.label}</span>
+                          {categoryCounts[cat.id] ? (
+                            <span className="ss-css-section-count">{categoryCounts[cat.id]}</span>
+                          ) : null}
                           <svg
                             className="ss-edit-panel__section-chevron"
                             width="12"
