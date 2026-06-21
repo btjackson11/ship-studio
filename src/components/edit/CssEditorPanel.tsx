@@ -490,8 +490,8 @@ export function CssEditorPanel({
         {!prep && res?.status === 'needs_class' && (
           <div className="ss-css-readonly">
             <p>
-              This element has no class to style. Add a class to it in code, then reselect — or let
-              the agent prepare the project.
+              This element has no class yet. Use <strong>Add class</strong> above to give it one,
+              then style its rule.
             </p>
             {prepLink}
           </div>

@@ -164,12 +164,12 @@ export function CssClassBar({
       <button
         ref={addRef}
         type="button"
-        className="ss-css-chip__add"
+        className={`ss-css-chip__add${classes.length === 0 ? ' ss-css-chip__add--labeled' : ''}`}
         onClick={openCombo}
         title="Add a class"
         aria-label="Add a class"
       >
-        +
+        {classes.length === 0 ? '+ Add class' : '+'}
       </button>
       {open && anchor && (
         <ClassCombobox

@@ -238,6 +238,13 @@
   color: var(--text-primary);
   border-color: var(--text-muted);
 }
+.ss-css-chip__add--labeled {
+  width: auto;
+  gap: 4px;
+  padding: 0 10px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
 .ss-css-states {
   margin-bottom: var(--spacing-sm);
 }
