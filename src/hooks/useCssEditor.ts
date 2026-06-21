@@ -24,6 +24,7 @@ import {
   setCssDeclaration,
   createCssClass,
   listStylesheets,
+  listCssClasses,
   toCssSignature,
   type CssResolution,
   type CssDeclaration,
@@ -59,6 +60,7 @@ export function useCssEditor({ iframeRef, projectPath, enabled, onToast }: Param
 
   const [selection, setSelection] = useState<CssSelection | null>(null);
   const [authoredSheets, setAuthoredSheets] = useState<string[]>([]);
+  const [allClasses, setAllClasses] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   // Mirror edit-mode direction + per-session counters for lifecycle analytics.
@@ -107,6 +109,9 @@ export function useCssEditor({ iframeRef, projectPath, enabled, onToast }: Param
     void listStylesheets(projectPath)
       .then((sheets) => !cancelled && setAuthoredSheets(sheets))
       .catch(() => !cancelled && setAuthoredSheets([]));
+    void listCssClasses(projectPath)
+      .then((cls) => !cancelled && setAllClasses(cls))
+      .catch(() => !cancelled && setAllClasses([]));
     return () => {
       cancelled = true;
     };
@@ -398,6 +403,7 @@ export function useCssEditor({ iframeRef, projectPath, enabled, onToast }: Param
     toggleEditMode,
     selection,
     authoredSheets,
+    allClasses,
     saving,
     previewDeclaration,
     saveDeclaration,

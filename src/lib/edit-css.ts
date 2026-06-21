@@ -127,6 +127,12 @@ export function listStylesheets(projectPath: string): Promise<string[]> {
   return invoke<string[]>('list_stylesheets', { projectPath });
 }
 
+/** Every class name defined across the project's stylesheets (for the class
+ *  bar's search-and-create combobox). */
+export function listCssClasses(projectPath: string): Promise<string[]> {
+  return invoke<string[]>('list_css_classes', { projectPath });
+}
+
 /**
  * Build a ready-to-paste agent request that refactors a project toward the
  * conventions the CSS visual editor relies on. This is the on-ramp for projects

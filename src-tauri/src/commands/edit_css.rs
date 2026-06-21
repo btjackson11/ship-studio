@@ -84,14 +84,54 @@ pub struct CssSignature {
     pub pseudo: Option<String>,
 }
 
-/// The sanitized `:pseudo` suffix for a signature, or "" for the default state.
-/// Only a conservative `[a-z-]` pseudo name is honored (never raw selector text).
+/// Whether a pseudo selector is safe to append (any state CSS allows — simple
+/// `:hover`, functional `:nth-child(2n+1)`, `:not(.x)`, pseudo-elements
+/// `::before`) while forbidding structural chars that could break out of the
+/// selector (`{`, `}`, `;`). Must start with `:`, have balanced parens, and
+/// contain a letter.
+fn is_safe_pseudo(s: &str) -> bool {
+    if !s.starts_with(':') {
+        return false;
+    }
+    let mut depth = 0i32;
+    let mut saw_alpha = false;
+    for c in s.chars() {
+        match c {
+            ':' | '-' | '_' | '+' | '.' | '#' | '%' | ',' | ' ' => {}
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth < 0 {
+                    return false;
+                }
+            }
+            c if c.is_ascii_alphanumeric() => {
+                if c.is_ascii_alphabetic() {
+                    saw_alpha = true;
+                }
+            }
+            _ => return false,
+        }
+    }
+    depth == 0 && saw_alpha
+}
+
+/// The sanitized pseudo suffix for a signature, or "" for the default state.
+/// The pseudo may carry its own colon(s) (`::before`); a bare name gets one.
 fn pseudo_suffix(sig: &CssSignature) -> String {
     match sig.pseudo.as_deref() {
         Some(p) => {
-            let name = p.trim().trim_start_matches(':');
-            if !name.is_empty() && name.chars().all(|c| c.is_ascii_lowercase() || c == '-') {
-                format!(":{name}")
+            let t = p.trim();
+            if t.is_empty() {
+                return String::new();
+            }
+            let with_colon = if t.starts_with(':') {
+                t.to_string()
+            } else {
+                format!(":{t}")
+            };
+            if is_safe_pseudo(&with_colon) {
+                with_colon
             } else {
                 String::new()
             }
@@ -869,6 +909,48 @@ pub fn list_stylesheets(project_path: String) -> Result<Vec<String>, CommandErro
         .collect())
 }
 
+/// Every class name referenced in any rule selector (`.foo .bar:hover` → foo,
+/// bar). Powers the class bar's search-and-create combobox.
+fn class_names_in(selector: &str) -> Vec<String> {
+    let bytes = selector.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'.' {
+            let start = i + 1;
+            let mut j = start;
+            while j < bytes.len()
+                && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'-' || bytes[j] == b'_')
+            {
+                j += 1;
+            }
+            if j > start {
+                out.push(selector[start..j].to_string());
+            }
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+/// All class names defined across the project's stylesheets, sorted & unique.
+#[tauri::command]
+#[tracing::instrument(fields(project = %project_path))]
+pub fn list_css_classes(project_path: String) -> Result<Vec<String>, CommandError> {
+    let root = validate_project_path(&project_path)?;
+    let mut set = std::collections::BTreeSet::new();
+    for (_, content) in discover_stylesheets(&root) {
+        for rule in index_rules(&content) {
+            for c in class_names_in(&rule.selector) {
+                set.insert(c);
+            }
+        }
+    }
+    Ok(set.into_iter().collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -881,6 +963,30 @@ mod tests {
             has_inline_style: false,
             pseudo: None,
         }
+    }
+
+    #[test]
+    fn extracts_class_names_from_selectors() {
+        assert_eq!(
+            class_names_in(".hero .hero-title:hover"),
+            vec!["hero", "hero-title"]
+        );
+        assert_eq!(class_names_in("section.cta > .btn"), vec!["cta", "btn"]);
+        assert!(class_names_in("div > a:hover").is_empty());
+    }
+
+    #[test]
+    fn pseudo_allows_functional_and_pseudo_elements() {
+        let mut s = sig("x");
+        s.pseudo = Some("nth-child(even)".into());
+        assert_eq!(pseudo_suffix(&s), ":nth-child(even)");
+        s.pseudo = Some("::before".into());
+        assert_eq!(pseudo_suffix(&s), "::before");
+        s.pseudo = Some(":not(.foo)".into());
+        assert_eq!(pseudo_suffix(&s), ":not(.foo)");
+        // Reject injection.
+        s.pseudo = Some("hover{}body".into());
+        assert_eq!(pseudo_suffix(&s), "");
     }
 
     #[test]

@@ -220,7 +220,7 @@ export const CSS_CATEGORIES: CssCategory[] = [
     label: 'Position',
     controls: [
       {
-        kind: 'segmented',
+        kind: 'select',
         prop: 'position',
         label: 'Position',
         options: [
@@ -245,11 +245,21 @@ export const CSS_CATEGORIES: CssCategory[] = [
     ],
   },
   {
+    id: 'transform',
+    label: 'Transform',
+    controls: [
+      { kind: 'length', prop: 'transform', label: 'Transform', placeholder: 'none' },
+      { kind: 'length', prop: 'transform-origin', label: 'Origin', placeholder: 'center' },
+      { kind: 'length', prop: 'transition', label: 'Transition', placeholder: 'none' },
+    ],
+  },
+  {
     id: 'effects',
     label: 'Effects',
     controls: [
       { kind: 'length', prop: 'opacity', label: 'Opacity', placeholder: '1' },
       { kind: 'length', prop: 'box-shadow', label: 'Box shadow', placeholder: 'none' },
+      { kind: 'length', prop: 'filter', label: 'Filter', placeholder: 'none' },
       {
         kind: 'select',
         prop: 'overflow',

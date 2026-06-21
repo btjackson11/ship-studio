@@ -30,6 +30,7 @@ function renderPanel(
     onCreateRule: vi.fn(),
     targetClass: null,
     pseudo: null,
+    allClasses: [],
     onSelectClass: vi.fn(),
     onAddClass: vi.fn(),
     onRemoveClass: vi.fn(),

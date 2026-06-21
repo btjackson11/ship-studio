@@ -181,7 +181,8 @@
   overflow: hidden;
 }
 .ss-css-chip.is-active {
-  border-color: var(--action);
+  border-color: var(--text-muted);
+  background: var(--bg-secondary);
 }
 .ss-css-chip__name {
   border: none;
@@ -189,11 +190,11 @@
   color: var(--text-secondary);
   font-family: var(--font-mono, monospace);
   font-size: var(--font-size-xs);
-  padding: 3px 6px;
+  padding: 4px 6px;
   cursor: pointer;
 }
 .ss-css-chip.is-active .ss-css-chip__name {
-  color: var(--action);
+  color: var(--text-primary);
   font-weight: 600;
 }
 .ss-css-chip__x {
@@ -209,35 +210,114 @@
   color: var(--text-primary);
 }
 .ss-css-chip__add {
-  width: 22px;
-  height: 22px;
-  border: 1px dashed var(--border);
-  background: none;
-  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-md);
   line-height: 1;
   cursor: pointer;
+  transition:
+    color var(--transition),
+    border-color var(--transition);
 }
 .ss-css-chip__add:hover {
   color: var(--text-primary);
   border-color: var(--text-muted);
 }
-.ss-css-chip__input {
-  width: 96px;
+.ss-css-states {
+  margin-bottom: var(--spacing-sm);
+}
+.ss-css-state-add {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 6px;
+}
+.ss-css-state-add:hover {
+  color: var(--text-primary);
+}
+.ss-css-state-input {
+  width: 100%;
   font-family: var(--font-mono, monospace);
   font-size: var(--font-size-xs);
   color: var(--text-primary);
   background: var(--bg-tertiary);
   border: 1px solid var(--action);
   border-radius: var(--radius-sm);
-  padding: 3px 6px;
+  padding: 4px 6px;
+  margin-top: 6px;
 }
-.ss-css-chip__input:focus {
+.ss-css-state-input:focus {
   outline: none;
 }
-.ss-css-states {
-  margin-bottom: var(--spacing-sm);
+
+/* Class combobox (search + create) */
+.ss-css-combo {
+  position: fixed;
+  z-index: calc(var(--z-modal-overlay) + 1);
+  width: 232px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+.ss-css-combo__input {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: var(--font-size-xs);
+  padding: 8px 10px;
+}
+.ss-css-combo__input:focus {
+  outline: none;
+}
+.ss-css-combo__list {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+.ss-css-combo__item,
+.ss-css-combo__create {
+  text-align: left;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-xs);
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.ss-css-combo__item:hover,
+.ss-css-combo__create:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.ss-css-combo__create {
+  color: var(--text-primary);
+}
+.ss-css-combo__create code {
+  color: var(--action);
+}
+.ss-css-combo__empty {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  padding: 8px;
 }
 
 /* ── Visual / Code mode toggle ───────────────────────────────────── */
@@ -412,9 +492,14 @@
 }
 .ss-cc-color {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: 34px 1fr;
   gap: var(--spacing-xs);
-  align-items: center;
+  align-items: stretch;
+}
+/* Match the swatch height to the value input beside it. */
+.ss-cc-color .ss-color-swatch {
+  width: 100%;
+  height: auto;
 }
 .ss-cc-swatch {
   width: 28px;

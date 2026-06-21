@@ -389,6 +389,7 @@ pub fn run() {
             commands::edit_css::set_css_declaration,
             commands::edit_css::create_css_class,
             commands::edit_css::list_stylesheets,
+            commands::edit_css::list_css_classes,
             commands::custom_classes::detect_tailwind_setup,
             commands::custom_classes::list_custom_classes,
             commands::custom_classes::create_custom_class,

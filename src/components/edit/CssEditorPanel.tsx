@@ -27,7 +27,7 @@ import { CSS_CATEGORIES, PROP_TO_CATEGORY } from '../../lib/cssControls';
 
 /** Common sections start open; the long-tail ones collapse to keep it scannable. */
 function defaultSectionOpen(id: string): boolean {
-  return !['position', 'effects'].includes(id);
+  return !['position', 'transform', 'effects'].includes(id);
 }
 import type { CssSelection } from '../../hooks/useCssEditor';
 import type { CssDeclaration } from '../../lib/edit-css';
@@ -95,6 +95,7 @@ interface Props {
   // Class bar + state switcher.
   targetClass: string | null;
   pseudo: string | null;
+  allClasses: string[];
   onSelectClass: (name: string) => void;
   onAddClass: (name: string) => void;
   onRemoveClass: (name: string) => void;
@@ -156,6 +157,7 @@ export function CssEditorPanel({
   onSendToClaude,
   targetClass,
   pseudo,
+  allClasses,
   onSelectClass,
   onAddClass,
   onRemoveClass,
@@ -341,6 +343,7 @@ export function CssEditorPanel({
             <CssClassBar
               classes={classes}
               active={activeClass}
+              allClasses={allClasses}
               onSelect={onSelectClass}
               onRemove={onRemoveClass}
               onAdd={onAddClass}

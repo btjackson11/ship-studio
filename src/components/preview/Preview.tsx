@@ -1147,6 +1147,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
               onSendToClaude={onSendToClaude}
               targetClass={cssEditor.targetClass}
               pseudo={cssEditor.pseudo}
+              allClasses={cssEditor.allClasses}
               onSelectClass={cssEditor.setTargetClass}
               onAddClass={(name) => void cssEditor.addClass(name)}
               onRemoveClass={(name) => void cssEditor.removeClass(name)}
