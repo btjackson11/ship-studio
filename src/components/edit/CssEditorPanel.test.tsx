@@ -121,6 +121,14 @@ describe('CssEditorPanel', () => {
     expect(onSave).toHaveBeenCalledWith('opacity', '0.5');
   });
 
+  it('clicking a set property label resets it', () => {
+    const onSave = vi.fn();
+    renderPanel(resolved([{ property: 'opacity', value: '0.5', important: false }]), { onSave });
+    fireEvent.click(screen.getByRole('button', { name: 'Opacity' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    expect(onSave).toHaveBeenCalledWith('opacity', null);
+  });
+
   it('Code view shows raw CSS and saves the diff', () => {
     const onSaveMany = vi.fn();
     renderPanel(resolved([{ property: 'color', value: 'red', important: false }]), { onSaveMany });

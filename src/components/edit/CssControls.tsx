@@ -10,7 +10,15 @@
  * (`EnumDropdown`, `ColorPicker`) so both editors look and behave identically.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '../primitives/Button';
 import { EnumDropdown } from './EnumDropdown';
@@ -38,10 +46,104 @@ interface ControlProps {
   onSave: (property: string, value: string | null) => void;
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+/** A control label that doubles as a Reset affordance — same behavior as the
+ *  Tailwind editor's ResettableLabel: when the property is set, the label is
+ *  clickable and pops a floating "Reset" next to the cursor that clears it. */
+function ResettableCcLabel({
+  label,
+  isSet,
+  onReset,
+}: {
+  label: string;
+  isSet: boolean;
+  onReset: () => void;
+}) {
+  const [pop, setPop] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!pop) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (popRef.current?.contains(t) || btnRef.current?.contains(t)) return;
+      setPop(null);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setPop(null);
+    const onScroll = () => setPop(null);
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [pop]);
+
+  if (!isSet) return <span className="ss-cc-label">{label}</span>;
+
+  const openAt = (e: ReactMouseEvent) => {
+    const M = 8;
+    const W = 72;
+    const H = 28;
+    setPop({
+      left: Math.min(e.clientX + 10, window.innerWidth - W - M),
+      top: Math.min(e.clientY + 10, window.innerHeight - H - M),
+    });
+  };
+
+  return (
+    <span className="ss-cc-label ss-cc-label--resettable">
+      <button
+        ref={btnRef}
+        type="button"
+        className="ss-cc-labelbtn"
+        aria-expanded={pop !== null}
+        onClick={openAt}
+        title={`${label} is set — click to reset`}
+      >
+        {label}
+        <span className="ss-cc-setdot" aria-hidden />
+      </button>
+      {pop &&
+        createPortal(
+          <button
+            ref={popRef}
+            type="button"
+            className="ss-reset-pop"
+            style={{ top: pop.top, left: pop.left }}
+            onClick={() => {
+              onReset();
+              setPop(null);
+            }}
+          >
+            Reset
+          </button>,
+          document.body
+        )}
+    </span>
+  );
+}
+
+function Field({
+  label,
+  isSet,
+  onReset,
+  children,
+}: {
+  label: string;
+  isSet?: boolean;
+  onReset?: () => void;
+  children: ReactNode;
+}) {
   return (
     <div className="ss-cc-field">
-      <span className="ss-cc-label">{label}</span>
+      {onReset ? (
+        <ResettableCcLabel label={label} isSet={!!isSet} onReset={onReset} />
+      ) : (
+        <span className="ss-cc-label">{label}</span>
+      )}
       {children}
     </div>
   );
@@ -56,7 +158,14 @@ function Segmented({
   onSave,
 }: ControlProps & { prop: string; label: string; options: SegOption[] }) {
   return (
-    <Field label={label}>
+    <Field
+      label={label}
+      isSet={value.trim() !== ''}
+      onReset={() => {
+        onPreview(prop, null);
+        onSave(prop, null);
+      }}
+    >
       <div className="ss-cc-seg" role="group" aria-label={label}>
         {options.map((o) => {
           const active = value === o.value;
@@ -91,7 +200,14 @@ function SelectControl({
   onSave,
 }: ControlProps & { prop: string; label: string; options: { value: string; label: string }[] }) {
   return (
-    <Field label={label}>
+    <Field
+      label={label}
+      isSet={value.trim() !== ''}
+      onReset={() => {
+        onPreview(prop, null);
+        onSave(prop, null);
+      }}
+    >
       <EnumDropdown
         label={label}
         value={value || null}
@@ -130,7 +246,14 @@ function LengthControl({
     onSave(prop, next === '' ? null : next);
   };
   return (
-    <Field label={label}>
+    <Field
+      label={label}
+      isSet={value.trim() !== ''}
+      onReset={() => {
+        onPreview(prop, null);
+        onSave(prop, null);
+      }}
+    >
       <input
         className={`ss-cc-input${!valid ? ' is-invalid' : ''}`}
         value={v}
@@ -228,7 +351,14 @@ function ColorControl({
   };
 
   return (
-    <Field label={label}>
+    <Field
+      label={label}
+      isSet={value.trim() !== ''}
+      onReset={() => {
+        onPreview(prop, null);
+        onSave(prop, null);
+      }}
+    >
       <div className="ss-cc-color">
         <button
           ref={triggerRef}
