@@ -6,6 +6,15 @@ The latest entry is rendered inside the in-app update dialog, so write user-
 facing language — what changed, in plain English — not commit subjects.
 -->
 
+## What's New in v0.11.0
+
+- **Visual editing for plain CSS projects** - Point-and-click style editing now works on vanilla HTML/CSS and plain Astro sites, not just Tailwind. Select any element and edit its real CSS rule; the change applies to every element that shares the class.
+- **Edit by class, state, and breakpoint** - Choose which of an element's classes you're styling, target states like :hover, and edit responsive @media layers, all from the panel.
+- **Visual or code** - Flip any rule between the structured controls and a real code editor with syntax highlighting, then save straight back to your stylesheet.
+- **New plain HTML/CSS starter** - Spin up a no-framework project in one click.
+- **Faster and safer** - Element selection is snappier on large projects, and editing no longer crashes on pages that contain emoji or accented text.
+
+
 ## What's New in v0.10.0
 
 - **Workspaces** - Keep separate Claude, GitHub, and Codex logins for different clients or orgs, fully isolated. Each workspace has its own credentials, so an agent working in one project never sees another's auth. Your existing setup becomes the "Default" workspace, untouched. Assign any project to a workspace — its terminals, git, PRs, and AI all use that workspace's logins automatically — and move projects between workspaces right from the dashboard.
