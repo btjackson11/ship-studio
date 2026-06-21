@@ -97,6 +97,13 @@ export const TEMPLATES: Template[] = [
     category: 'web',
   },
   {
+    id: 'astro-html',
+    name: 'Astro (HTML/CSS)',
+    description: 'A fast site styled with plain CSS — edit styles by clicking, no Tailwind.',
+    repo: 'https://github.com/ship-studio/astro-html-starter',
+    category: 'web',
+  },
+  {
     id: 'nuxt-basic',
     name: 'Nuxt',
     description: 'A website built on Vue.',
