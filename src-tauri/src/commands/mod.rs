@@ -11,6 +11,7 @@ pub mod code;
 pub mod conflicts;
 pub mod custom_classes;
 pub mod edit;
+pub mod edit_css;
 pub mod env;
 pub mod external_projects;
 pub mod folders;
