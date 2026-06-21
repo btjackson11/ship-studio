@@ -2280,7 +2280,12 @@ fn element_span(src: &str, inside_open_tag: usize) -> Option<(usize, usize)> {
     let mut depth = 1i32;
     let mut p = open_end;
     while p < n {
-        if p + 4 <= n && &src[p..p + 4] == "<!--" {
+        // Byte comparison, NOT `&src[p..p+4]`: `p` advances byte-by-byte over
+        // arbitrary text, so a `&str` slice here panics the moment it lands mid
+        // multi-byte UTF-8 char (curly quotes, emoji, accents in element text).
+        // `p` is only a char boundary once `bytes[p] == b'<'`, which the slices
+        // below all sit behind — this probe runs at every position.
+        if p + 4 <= n && &bytes[p..p + 4] == b"<!--" {
             p = src[p..].find("-->").map(|r| p + r + 3)?;
             continue;
         }
@@ -2491,6 +2496,19 @@ mod tests {
     fn element_span_skips_comment_and_quoted_gt() {
         let src = r#"<div class="cls" data-x="a>b"><!-- </div> --><span>x</span></div>"#;
         assert_eq!(span_str(src), src);
+    }
+
+    #[test]
+    fn element_span_handles_multibyte_utf8_text() {
+        // Regression: the forward walk advances byte-by-byte, so a `&str` slice
+        // in the comment probe used to panic ("byte index is not a char
+        // boundary") the moment it stepped into a multi-byte char in element
+        // text (curly quotes, emoji, accents). Must walk past it cleanly.
+        let src = "<p class=\"cls\">“Café” — déjà vu 🚀 done</p>tail";
+        assert_eq!(
+            span_str(src),
+            "<p class=\"cls\">“Café” — déjà vu 🚀 done</p>"
+        );
     }
 
     #[test]

@@ -25,6 +25,16 @@ interface ChangelogEntry {
 // Keep ~15 most recent versions for the sidebar
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.11.0', // v0.11.0
+    items: [
+      'Visual editing for plain CSS projects — point-and-click style editing now works on vanilla HTML/CSS and plain Astro sites, not just Tailwind. Select any element and edit its real CSS rule; the change applies to every element that shares the class',
+      "Edit by class, state, and breakpoint — choose which of an element's classes you're styling, target states like :hover, and edit responsive @media layers, all from the panel",
+      'Visual or code — flip any rule between the structured controls and a real code editor with syntax highlighting, then save straight back to your stylesheet',
+      'New plain HTML/CSS starter for spinning up a no-framework project',
+      'Faster and safer — element selection is snappier on large projects, and editing no longer crashes on pages that contain emoji or accented text',
+    ],
+  },
+  {
     version: '0.10.0', // v0.10.0
     items: [
       'Workspaces — keep separate Claude, GitHub, and Codex logins for different clients or orgs, fully isolated. Each workspace has its own credentials, so the agent working in one project never sees another client\'s auth. Your existing setup becomes the "Default" workspace and is left completely untouched',
