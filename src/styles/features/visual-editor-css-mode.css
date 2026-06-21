@@ -593,9 +593,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--spacing-sm);
 }
 .ss-css-prep__right {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--spacing-xs);
 }

@@ -319,7 +319,7 @@ export function CssEditorPanel({
                 </Button>
                 {onSendToClaude && (
                   <Button variant="primary" size="sm" onClick={() => onSendToClaude(prepPrompt)}>
-                    Paste into terminal
+                    Paste
                   </Button>
                 )}
               </div>

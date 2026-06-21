@@ -141,7 +141,7 @@ describe('CssEditorPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /prepare this project/i }));
     // The review view shows the prompt and a paste action.
     expect(screen.getByText(/refactor this project's styling/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /paste into terminal/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Paste' }));
     expect(onSendToClaude).toHaveBeenCalledTimes(1);
     expect(onSendToClaude.mock.calls[0][0]).toMatch(/one semantic class/i);
   });
