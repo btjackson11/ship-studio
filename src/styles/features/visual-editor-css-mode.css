@@ -34,10 +34,12 @@
    band above it. */
 .ss-css-context {
   position: sticky;
-  /* Stick flush to the top of the scroll area — the panel header's own
-     border-bottom is the divider above it, so this carries only a
-     border-bottom (a border-top here would double up against the header). */
-  top: 0;
+  /* Pin FLUSH to the top of the scroll area: the negative offset cancels the
+     body's top padding so no scrolled content (e.g. a section header) peeks
+     through the padding band above it. It carries only a border-bottom — the
+     panel header's own border-bottom is the divider above, and a border-top
+     here would double up against it. */
+  top: calc(-1 * var(--spacing-md));
   z-index: 1;
   display: flex;
   align-items: baseline;
