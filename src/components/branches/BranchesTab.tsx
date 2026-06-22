@@ -33,6 +33,13 @@ import { trackEvent, trackError } from '../../lib/analytics';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
 import { useOptionalToast } from '../../contexts/ToastContext';
+import { asCommandError, formatCommandError } from '../../lib/errors';
+
+/** A Tauri-rejected `CommandError` is an object — `String(err)` renders it as
+ *  "[object Object]". Format it to the real human message (the git stderr). */
+function errText(e: unknown): string {
+  return formatCommandError(asCommandError(e));
+}
 
 interface BranchesTabProps {
   /** List of all branches */
@@ -143,7 +150,7 @@ export function BranchesTab({
       }
     } catch (e) {
       trackError('branch_switch', e, 'Workspace');
-      onToast?.(`Failed to switch: ${String(e)}`, 'error');
+      onToast?.(`Failed to switch: ${errText(e)}`, 'error');
     } finally {
       setSwitchingBranch(null);
     }
@@ -162,7 +169,7 @@ export function BranchesTab({
       onRefresh();
     } catch (e) {
       trackError('branch_delete', e, 'Workspace');
-      onToast?.(`Failed to delete: ${String(e)}`, 'error');
+      onToast?.(`Failed to delete: ${errText(e)}`, 'error');
     } finally {
       setDeletingBranch(null);
       setBranchToDelete(null);
@@ -183,7 +190,7 @@ export function BranchesTab({
       onRefresh();
     } catch (e) {
       trackError('branch_revert', e, 'Workspace');
-      onToast?.(`Failed to revert: ${String(e)}`, 'error');
+      onToast?.(`Failed to revert: ${errText(e)}`, 'error');
     } finally {
       setIsReverting(false);
     }
@@ -217,7 +224,7 @@ export function BranchesTab({
       onRefresh();
     } catch (e) {
       trackError('branch_create', e, 'Workspace');
-      onToast?.(`Failed to create branch: ${String(e)}`, 'error');
+      onToast?.(`Failed to create branch: ${errText(e)}`, 'error');
     } finally {
       setIsCreatingBranch(false);
     }
