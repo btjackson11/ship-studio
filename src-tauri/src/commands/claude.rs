@@ -224,6 +224,10 @@ fn candidate_paths_for(binary_name: &str) -> Vec<std::path::PathBuf> {
                 push_candidate(&mut paths, &mut seen, path);
             }
 
+            // Enumerate *every* installed Node version's bin dir (newest first),
+            // not just the latest. `get_extended_path()` (utils.rs) only adds the
+            // single most-recent NVM version to PATH, so an agent CLI installed
+            // under an older Node would be missed there — we walk them all here.
             let nvm_versions = home.join(".nvm/versions/node");
             if let Ok(entries) = std::fs::read_dir(&nvm_versions) {
                 let mut versions: Vec<_> =
@@ -287,6 +291,11 @@ fn candidate_paths_for(binary_name: &str) -> Vec<std::path::PathBuf> {
     paths
 }
 
+// Walks every dir in `path_env`, emitting a candidate per dir (with the
+// platform's executable extensions on Windows). This intentionally mirrors the
+// dir-walk in `utils::find_executable`, but unlike that helper — which returns
+// the first hit — we collect the *full* candidate list so the caller's
+// validation/shadowing logic (`find_validated_binary`) can inspect every match.
 fn add_extended_path_candidates(
     paths: &mut Vec<std::path::PathBuf>,
     seen: &mut std::collections::HashSet<std::path::PathBuf>,
