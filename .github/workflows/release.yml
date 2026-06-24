@@ -86,13 +86,6 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
 
-      - name: Write Apple API key file
-        env:
-          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
-        run: |
-          mkdir -p $RUNNER_TEMP/apple-keys
-          echo "$APPLE_API_KEY_CONTENT" | base64 --decode > $RUNNER_TEMP/apple-keys/AuthKey_${{ secrets.APPLE_API_KEY }}.p8
-
       - name: Install frontend dependencies
         run: pnpm install
 
@@ -108,9 +101,13 @@ jobs:
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           CSTAR_IDENTITY_SECRET: ${{ secrets.CSTAR_IDENTITY_SECRET }}
           APPLE_SIGNING_IDENTITY: "Developer ID Application"
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-keys/AuthKey_${{ secrets.APPLE_API_KEY }}.p8
+          # Notarization intentionally disabled: it requires an in-effect Apple
+          # Developer agreement (was returning HTTP 403 and blocking every
+          # release). The app is still Developer ID code-signed, which preserves
+          # silent in-place auto-updates for existing users. New users install
+          # via the one-command installer (scripts/install.sh), which strips the
+          # Gatekeeper quarantine flag — so notarization isn't needed. To
+          # re-enable, restore the APPLE_API_* env vars + the API-key step above.
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Ship Studio v__VERSION__'
