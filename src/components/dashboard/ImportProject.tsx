@@ -257,13 +257,19 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
     // workspace doesn't error out (`sugar-shark`, `sugar-shark-2`, ...).
     let safeName = baseName;
     let counter = 2;
-    while (await exists(`${shipstudioDir}/${safeName}`).catch(() => false)) {
-      safeName = `${baseName}-${counter}`;
-      counter += 1;
-      if (counter > 50) {
-        setError(`Too many copies of "${baseName}" already exist`);
-        return;
+    try {
+      while (await exists(`${shipstudioDir}/${safeName}`)) {
+        safeName = `${baseName}-${counter}`;
+        counter += 1;
+        if (counter > 50) {
+          setError(`Too many copies of "${baseName}" already exist`);
+          return;
+        }
       }
+    } catch (err) {
+      trackError('project_import', err, 'Dashboard');
+      setError(getFriendlyError(err));
+      return;
     }
 
     setIsImporting(true);

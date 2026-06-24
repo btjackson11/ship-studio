@@ -456,7 +456,7 @@ export function ProjectList({
       logger.error('Failed to remove project from Ship Studio', {
         error: error instanceof Error ? error.message : String(error),
       });
-      alert('Failed to remove project: ' + formatCommandError(asCommandError(error)));
+      showToast(`Failed to remove project: ${formatCommandError(asCommandError(error))}`, 'error');
     } finally {
       setRemoving(false);
     }

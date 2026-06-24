@@ -128,20 +128,31 @@ fn project_visible_for_account(
 
 const REMOVED_PROJECTS_CONFIG_SCHEMA_VERSION: u32 = 1;
 
+/// Guards removed-project registry read/mutate/write cycles so simultaneous
+/// remove and restore actions cannot overwrite each other's changes.
+static REMOVED_PROJECTS_CONFIG_LOCK: std::sync::LazyLock<std::sync::Mutex<()>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(()));
+
 #[cfg(test)]
 static REMOVED_PROJECTS_CONFIG_PATH_OVERRIDE: std::sync::LazyLock<
     std::sync::Mutex<Option<PathBuf>>,
 > = std::sync::LazyLock::new(|| std::sync::Mutex::new(None));
 
-#[derive(Serialize, Deserialize, Clone)]
+/// One dashboard-hidden project entry in the app-level removal registry.
+#[derive(Serialize, Deserialize, Clone, Debug)]
 struct RemovedProject {
+    /// Canonical project directory path recorded at removal time.
     path: String,
+    /// Millisecond Unix timestamp used for audit/debugging.
     removed_at: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+/// Persistent app-level registry for local projects hidden from the dashboard.
+#[derive(Serialize, Deserialize, Clone, Debug)]
 struct RemovedProjectsConfig {
+    /// Schema version for future migrations.
     schema_version: u32,
+    /// Canonical project paths hidden from automatic local project scans.
     #[serde(default)]
     projects: Vec<RemovedProject>,
 }
@@ -156,6 +167,7 @@ impl Default for RemovedProjectsConfig {
 }
 
 impl RemovedProjectsConfig {
+    /// Returns true when the registry already hides the canonical project path.
     fn contains_path(&self, canonical_path: &Path) -> bool {
         self.projects
             .iter()
@@ -163,6 +175,7 @@ impl RemovedProjectsConfig {
     }
 }
 
+/// Returns the app-level path for the removed-projects registry.
 fn removed_projects_config_path() -> Result<PathBuf, String> {
     #[cfg(test)]
     if let Some(path) = REMOVED_PROJECTS_CONFIG_PATH_OVERRIDE
@@ -178,6 +191,8 @@ fn removed_projects_config_path() -> Result<PathBuf, String> {
         .join("removed-projects.json"))
 }
 
+/// Loads the removed-projects registry, returning an empty config only when it
+/// has not been created yet.
 fn load_removed_projects_config() -> Result<RemovedProjectsConfig, String> {
     let config_path = removed_projects_config_path()?;
 
@@ -192,6 +207,7 @@ fn load_removed_projects_config() -> Result<RemovedProjectsConfig, String> {
         .map_err(|e| format!("Failed to parse removed projects config: {e}"))
 }
 
+/// Persists the removed-projects registry to disk.
 fn save_removed_projects_config(config: &RemovedProjectsConfig) -> Result<(), String> {
     let config_path = removed_projects_config_path()?;
 
@@ -207,14 +223,18 @@ fn save_removed_projects_config(config: &RemovedProjectsConfig) -> Result<(), St
         .map_err(|e| format!("Failed to write removed projects config: {e}"))
 }
 
+/// Canonicalizes a path when possible, preserving the original path if it no
+/// longer exists.
 fn canonical_or_original(path: &Path) -> PathBuf {
     dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
+/// Compares a stored registry path to the current canonical project path.
 fn stored_path_matches(stored_path: &str, canonical_path: &Path) -> bool {
     canonical_or_original(Path::new(stored_path)) == canonical_path
 }
 
+/// Returns the current wall-clock time in milliseconds since the Unix epoch.
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -222,7 +242,11 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
+/// Records a canonical local project path as hidden from dashboard scans.
 fn mark_project_removed(canonical: &Path) -> Result<(), CommandError> {
+    let _guard = REMOVED_PROJECTS_CONFIG_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut config = load_removed_projects_config()?;
     if !config.contains_path(canonical) {
         config.projects.push(RemovedProject {
@@ -234,7 +258,11 @@ fn mark_project_removed(canonical: &Path) -> Result<(), CommandError> {
     Ok(())
 }
 
+/// Removes a canonical path from the hidden-project registry.
 pub(crate) fn restore_removed_project(canonical: &Path) -> Result<bool, CommandError> {
+    let _guard = REMOVED_PROJECTS_CONFIG_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut config = load_removed_projects_config()?;
     let initial_len = config.projects.len();
     config
@@ -260,7 +288,7 @@ pub async fn list_projects() -> Result<Vec<ProjectInfo>, CommandError> {
     let active_account_id = crate::commands::accounts::get_active_account_id().unwrap_or_default();
     // Live workspace list, read once so the visibility check stays IO-free per project.
     let accounts = crate::commands::setup::read_app_state().accounts;
-    let removed_projects = load_removed_projects_config().unwrap_or_default();
+    let removed_projects = load_removed_projects_config()?;
 
     if !shipstudio_dir.exists() {
         return Ok(Vec::new());
@@ -373,7 +401,7 @@ pub async fn get_dashboard_projects() -> Result<Vec<DashboardProject>, CommandEr
     let active_account_id = crate::commands::accounts::get_active_account_id().unwrap_or_default();
     // Live workspace list, read once so the visibility check stays IO-free per project.
     let accounts = crate::commands::setup::read_app_state().accounts;
-    let removed_projects = load_removed_projects_config().unwrap_or_default();
+    let removed_projects = load_removed_projects_config()?;
 
     if !shipstudio_dir.exists() {
         return Ok(Vec::new());
@@ -741,6 +769,30 @@ pub async fn delete_project(path: String) -> Result<(), CommandError> {
     Ok(())
 }
 
+/// Clears path-keyed dashboard references after a project has already been
+/// removed from the visible project set.
+async fn clear_project_dashboard_references(canonical: &Path) {
+    let canonical_str = canonical.to_string_lossy().to_string();
+
+    if let Err(err) =
+        crate::commands::folders::move_project_to_folder(canonical_str.clone(), None).await
+    {
+        tracing::warn!(
+            project = %canonical.display(),
+            error = %err,
+            "Failed to clear project folder assignment after removal"
+        );
+    }
+
+    if let Err(err) = crate::commands::projects::unpin_project(canonical_str).await {
+        tracing::warn!(
+            project = %canonical.display(),
+            error = %err,
+            "Failed to unpin project after removal"
+        );
+    }
+}
+
 /// Removes a project from Ship Studio's dashboard without deleting its files.
 ///
 /// Projects inside a configured projects folder are discovered automatically, so
@@ -750,13 +802,11 @@ pub async fn delete_project(path: String) -> Result<(), CommandError> {
 #[tauri::command]
 #[tracing::instrument]
 pub async fn remove_project_from_app(path: String) -> Result<(), CommandError> {
-    let canonical = dunce::canonicalize(&path).map_err(|_| "Project not found".to_string())?;
+    let canonical = validate_project_path(&path)?;
 
     if crate::commands::external_projects::is_registered_external_path(&canonical)? {
-        let canonical_str = canonical.to_string_lossy().to_string();
         crate::commands::external_projects::unregister_external_project(path).await?;
-        crate::commands::folders::move_project_to_folder(canonical_str.clone(), None).await?;
-        crate::commands::projects::unpin_project(canonical_str).await?;
+        clear_project_dashboard_references(&canonical).await;
         return Ok(());
     }
 
@@ -772,10 +822,7 @@ pub async fn remove_project_from_app(path: String) -> Result<(), CommandError> {
     }
 
     mark_project_removed(&canonical)?;
-
-    let canonical_str = canonical.to_string_lossy().to_string();
-    crate::commands::folders::move_project_to_folder(canonical_str.clone(), None).await?;
-    crate::commands::projects::unpin_project(canonical_str).await?;
+    clear_project_dashboard_references(&canonical).await;
 
     Ok(())
 }
@@ -1276,5 +1323,19 @@ mod tests {
 
         let config = load_removed_projects_config().unwrap();
         assert_eq!(config.projects.len(), 1);
+    }
+
+    #[test]
+    fn removed_projects_registry_reports_invalid_json() {
+        let _guard = REMOVED_PROJECTS_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let _override = RemovedProjectsConfigOverride::install();
+        let path = removed_projects_config_path().unwrap();
+        std::fs::write(&path, "{not valid json").unwrap();
+
+        let err = load_removed_projects_config().expect_err("invalid registry should fail closed");
+
+        assert!(err.contains("Failed to parse removed projects config"));
     }
 }
