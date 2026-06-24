@@ -256,8 +256,15 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASES_PAT }}
         run: |
           mkdir -p carry-forward
-          WIN_TAG=$(gh release list --repo ship-studio/releases --limit 50 \
-            --json tagName --jq '[.[] | select(.tagName | endswith("-win"))][0].tagName // empty')
+          # Pick the newest PUBLISHED -win release. `gh release list` returns
+          # drafts first, so the old `[0]` grabbed an ancient draft (v0.6.0-win),
+          # which is why every macOS release shipped a stale 0.6.0 Windows
+          # manifest and broke Windows auto-update. Exclude drafts and take the
+          # most recently published -win tag.
+          WIN_TAG=$(gh release list --repo ship-studio/releases --limit 100 \
+            --json tagName,isDraft,publishedAt \
+            --jq '[.[] | select(.isDraft == false) | select(.tagName | endswith("-win"))]
+                  | sort_by(.publishedAt) | last | .tagName // empty')
           if [ -z "$WIN_TAG" ]; then
             echo "::warning::No -win release found; skipping Windows carry-forward"
             exit 0
