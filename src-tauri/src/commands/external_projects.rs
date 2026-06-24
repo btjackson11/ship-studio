@@ -182,6 +182,10 @@ pub async fn register_external_project(app: AppHandle) -> Result<Option<String>,
         .iter()
         .any(|root| canonical.starts_with(root))
     {
+        if crate::commands::projects::restore_removed_project(&canonical)? {
+            return Ok(Some(canonical_str));
+        }
+
         return Err(
             "This project is already inside your projects folder. It will appear automatically."
                 .to_string()

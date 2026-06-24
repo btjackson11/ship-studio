@@ -138,6 +138,14 @@ export async function deleteProject(path: string): Promise<void> {
 }
 
 /**
+ * Remove a project from Ship Studio without deleting its files.
+ * @param path - Absolute path to the project directory to hide from the dashboard
+ */
+export async function removeProjectFromApp(path: string): Promise<void> {
+  return invoke<void>('remove_project_from_app', { path });
+}
+
+/**
  * Rename a project's folder on disk and rekey path-keyed stores (pins, folders,
  * sessions). Only works for ~/ShipStudio projects, and is rejected by the
  * backend if the project is currently open or has an active session.

@@ -14,7 +14,7 @@
 
 import { useState, useEffect } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { readTextFile } from '@tauri-apps/plugin-fs';
+import { exists, readTextFile } from '@tauri-apps/plugin-fs';
 import { trackError } from '../../lib/analytics';
 import {
   getGitHubUsername,
@@ -25,7 +25,6 @@ import {
   GitHubRepo,
 } from '../../lib/github';
 import {
-  listProjects,
   ensureShipStudioDir,
   spawnPty,
   ensureGitignoreHasShipstudio,
@@ -245,23 +244,26 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
       return;
     }
 
+    let shipstudioDir: string;
+    try {
+      shipstudioDir = await ensureShipStudioDir();
+    } catch (err) {
+      trackError('project_import', err, 'Dashboard');
+      setError(getFriendlyError(err));
+      return;
+    }
+
     // Auto-suffix on collision so re-importing a monorepo for a different
     // workspace doesn't error out (`sugar-shark`, `sugar-shark-2`, ...).
     let safeName = baseName;
-    try {
-      const existingProjects = await listProjects();
-      const existingNames = new Set(existingProjects.map((p) => p.name.toLowerCase()));
-      let counter = 2;
-      while (existingNames.has(safeName.toLowerCase())) {
-        safeName = `${baseName}-${counter}`;
-        counter += 1;
-        if (counter > 50) {
-          setError(`Too many copies of "${baseName}" already exist`);
-          return;
-        }
+    let counter = 2;
+    while (await exists(`${shipstudioDir}/${safeName}`).catch(() => false)) {
+      safeName = `${baseName}-${counter}`;
+      counter += 1;
+      if (counter > 50) {
+        setError(`Too many copies of "${baseName}" already exist`);
+        return;
       }
-    } catch {
-      // If we can't check, proceed with the base name
     }
 
     setIsImporting(true);
@@ -272,8 +274,6 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
     setAwaitingWorkspacePick(false);
 
     try {
-      // Ensure ShipStudio directory exists
-      const shipstudioDir = await ensureShipStudioDir();
       const projectPath = `${shipstudioDir}/${safeName}`;
 
       // Clone repository using gh CLI (uses GitHub CLI authentication)

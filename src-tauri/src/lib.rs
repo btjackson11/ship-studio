@@ -361,6 +361,7 @@ pub fn run() {
             commands::projects::create_blank_project,
             commands::projects::remove_git_history,
             commands::projects::delete_project,
+            commands::projects::remove_project_from_app,
             commands::projects::rename_project,
             commands::projects::clear_project_cache,
             commands::projects::get_auto_accept_mode,
