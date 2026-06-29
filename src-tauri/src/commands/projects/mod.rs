@@ -766,6 +766,7 @@ pub async fn delete_project(path: String) -> Result<(), CommandError> {
     }
 
     std::fs::remove_dir_all(&canonical).map_err(|e| e.to_string())?;
+    clear_project_dashboard_references(&canonical).await;
     Ok(())
 }
 

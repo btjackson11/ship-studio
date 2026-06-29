@@ -14,7 +14,6 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   DashboardProject,
   getDashboardProjects,
@@ -53,6 +52,10 @@ import { MoveFolderModal } from './MoveFolderModal';
 import { MoveWorkspaceModal } from './MoveWorkspaceModal';
 import { SettingsModal } from './SettingsModal';
 import { ProjectActionConfirmModal } from './ProjectActionConfirmModal';
+import { ProjectBulkActionsBar } from './ProjectBulkActionsBar';
+import { ProjectBulkActionConfirm } from './ProjectBulkActionConfirm';
+import { DashboardPreferencesCard } from './DashboardPreferencesCard';
+import { DashboardCommunityBanner } from './DashboardCommunityBanner';
 import { Spinner } from '../primitives/Spinner';
 import { GitHubCalendar } from './GitHubCalendar';
 import { useModal } from '../../contexts/ModalContext';
@@ -64,8 +67,11 @@ import {
 } from '../../lib/settings';
 import { moveProjectToAccount, getProjectAccountId } from '../../lib/accounts';
 import { useActiveAccount } from '../../hooks/useActiveAccount';
+import { useProjectBulkActions } from '../../hooks/useProjectBulkActions';
+import { useProjectViewModeCommands } from '../../hooks/useProjectViewModeCommands';
 import { useOptionalToast } from '../../contexts/ToastContext';
-import { SlackIcon, SettingsIcon, EyeOffIcon, ChevronRightIcon, HistoryIcon } from '../icons';
+import { ChevronRightIcon } from '../icons';
+import type { ProjectViewMode } from './ProjectGridView';
 
 /** Basic project info for selection callback */
 interface Project {
@@ -82,6 +88,12 @@ interface ProjectWithThumbnail extends DashboardProject {
 
 /** Available sort options for the project list */
 type SortOption = 'last_opened' | 'name';
+
+const PROJECT_VIEW_MODE_STORAGE_KEY = 'ship-studio-project-view-mode';
+
+function getInitialProjectViewMode(): ProjectViewMode {
+  return localStorage.getItem(PROJECT_VIEW_MODE_STORAGE_KEY) === 'list' ? 'list' : 'grid';
+}
 
 /** Props for the ProjectList component */
 interface ProjectListProps {
@@ -193,6 +205,8 @@ export function ProjectList({
   // dead useState.
   const searchQuery: string = '';
   const [sortBy, setSortBy] = useState<SortOption>('last_opened');
+  const [projectViewMode, setProjectViewMode] =
+    useState<ProjectViewMode>(getInitialProjectViewMode);
 
   // Monotonic token so a superseded loadAll() (e.g. the list fetched for the
   // old workspace right before a switch) neither applies its stale results nor
@@ -336,12 +350,52 @@ export function ProjectList({
     return folders.filter((f) => f.name.toLowerCase().includes(query));
   }, [folders, searchQuery, currentFolderId]);
 
+  const {
+    selectedProjectPaths,
+    selectedCount,
+    selectedIncludesExternalProject,
+    allVisibleSelected,
+    someVisibleSelected,
+    bulkConfirm,
+    bulkActionLoading,
+    setBulkConfirm,
+    handleToggleProjectSelection,
+    handleSelectAllVisible,
+    handleClearProjectSelection,
+    removeProjectFromSelection,
+    handleBeginBulkProjectAction,
+    handleBulkProjectAction,
+  } = useProjectBulkActions({
+    filteredProjects,
+    pinnedSet,
+    onTogglePin,
+    loadAll,
+    showToast,
+  });
+
+  const handleProjectViewModeChange = useCallback(
+    (mode: ProjectViewMode) => {
+      setProjectViewMode(mode);
+      localStorage.setItem(PROJECT_VIEW_MODE_STORAGE_KEY, mode);
+      if (mode === 'grid') {
+        handleClearProjectSelection();
+      }
+    },
+    [handleClearProjectSelection]
+  );
+
+  useProjectViewModeCommands(handleProjectViewModeChange);
+
   const handleDelete = async (project: DashboardProject) => {
     setDeleting(true);
     try {
       await deleteProject(project.path);
+      if (pinnedSet?.has(project.path)) {
+        await onTogglePin?.(project.path, false);
+      }
       void trackEvent('project_deleted', { $screen_name: 'Dashboard' });
       setDeleteConfirm(null);
+      removeProjectFromSelection(project.path);
       await loadAll();
     } catch (error) {
       trackError('project_delete', error, 'Dashboard');
@@ -449,6 +503,7 @@ export function ProjectList({
         $screen_name: 'Dashboard',
       });
       setRemoveConfirm(null);
+      removeProjectFromSelection(project.path);
       await loadAll();
       showToast(`${project.name} was removed from Ship Studio`, 'success');
     } catch (error) {
@@ -590,35 +645,7 @@ export function ProjectList({
         onDoubleClick={handleDashboardDoubleClick}
       />
       <div className="project-list dashboard">
-        {!slackCtaHidden && (
-          <div className="slack-cta" data-education-id="slack-cta">
-            <div className="slack-cta-content">
-              <SlackIcon />
-              <span>
-                <strong>Join the Slack</strong> — suggest features, share what you're building, and
-                shape the future of how we build for the web.
-              </span>
-            </div>
-            <button
-              className="slack-cta-join"
-              onClick={() =>
-                void openUrl(
-                  'https://join.slack.com/t/shipstudiocommunity/shared_invite/zt-41vbyaoo0-_pZWNPyMdvMoF6neuDYw7g'
-                )
-              }
-            >
-              Join Slack
-            </button>
-            <button
-              className="slack-cta-hide"
-              onClick={hideSlackCta}
-              title="Hide"
-              aria-label="Hide community banner"
-            >
-              <EyeOffIcon size={14} />
-            </button>
-          </div>
-        )}
+        {!slackCtaHidden && <DashboardCommunityBanner onHide={hideSlackCta} />}
 
         {!calendarHidden && (
           <GitHubCalendar
@@ -648,7 +675,9 @@ export function ProjectList({
           title={currentFolderId ? 'Projects' : 'All Projects'}
           totalCount={totalCount}
           sortBy={sortBy}
+          viewMode={projectViewMode}
           onSortChange={setSortBy}
+          onViewModeChange={handleProjectViewModeChange}
           onNewFolder={() => setShowNewFolderModal(true)}
           titleAccessory={
             !currentFolderId && hasMultipleWorkspaces && activeAccount && onSwitchAccount ? (
@@ -669,12 +698,28 @@ export function ProjectList({
           }
         />
 
+        {projectViewMode === 'list' && (
+          <ProjectBulkActionsBar
+            selectedCount={selectedCount}
+            selectedIncludesExternalProject={selectedIncludesExternalProject}
+            onClear={handleClearProjectSelection}
+            onRemove={() => handleBeginBulkProjectAction('remove')}
+            onDelete={() => handleBeginBulkProjectAction('delete')}
+          />
+        )}
+
         <ProjectGridView
+          viewMode={projectViewMode}
           currentFolderId={currentFolderId}
           searchQuery={searchQuery}
           totalCount={totalCount}
           filteredFolders={filteredFolders}
           filteredProjects={filteredProjects}
+          selectedProjectPaths={selectedProjectPaths}
+          allVisibleSelected={allVisibleSelected}
+          someVisibleSelected={someVisibleSelected}
+          onSelectAllVisible={handleSelectAllVisible}
+          onToggleProjectSelection={handleToggleProjectSelection}
           onSelectProject={(project) => onSelectProject(project)}
           onDeleteProject={(project) => setDeleteConfirm(project)}
           onRenameProject={(project) => setRenameTarget(project)}
@@ -696,57 +741,10 @@ export function ProjectList({
 
         <AgentsPanel />
 
-        <section className="dashboard-card">
-          <header className="dashboard-card-header">
-            <div>
-              <h3 className="dashboard-card-title">Preferences</h3>
-              <p className="dashboard-card-subtitle">
-                Adjust app settings or review recent updates.
-              </p>
-            </div>
-          </header>
-          <div className="dashboard-card-rows">
-            <button
-              type="button"
-              className="dashboard-card-row"
-              data-education-id="settings-button"
-              onClick={() => {
-                void trackEvent('settings_opened', { $screen_name: 'Dashboard' });
-                setShowSettings(true);
-              }}
-            >
-              <div className="dashboard-card-row-icon">
-                <SettingsIcon size={18} />
-              </div>
-              <div className="dashboard-card-row-main">
-                <div className="dashboard-card-row-name">Settings</div>
-                <div className="dashboard-card-row-status">
-                  Dashboard widgets, compact mode, learn mode
-                </div>
-              </div>
-              <ChevronRightIcon size={14} />
-            </button>
-            <button
-              type="button"
-              className="dashboard-card-row"
-              onClick={() => {
-                void trackEvent('changelog_opened', { $screen_name: 'Dashboard' });
-                changelogModal.open();
-              }}
-            >
-              <div className="dashboard-card-row-icon">
-                <HistoryIcon size={14} />
-              </div>
-              <div className="dashboard-card-row-main">
-                <div className="dashboard-card-row-name">What's New</div>
-                <div className="dashboard-card-row-status">
-                  Recent updates and downgrade to older versions
-                </div>
-              </div>
-              <ChevronRightIcon size={14} />
-            </button>
-          </div>
-        </section>
+        <DashboardPreferencesCard
+          onOpenSettings={() => setShowSettings(true)}
+          onOpenChangelog={() => changelogModal.open()}
+        />
 
         <MachineToolsPanel />
 
@@ -814,6 +812,16 @@ export function ProjectList({
           currentName={renameTarget?.name ?? ''}
           onRename={handleRename}
         />
+
+        {/* Bulk Project Action Confirmation Modal */}
+        {bulkConfirm && (
+          <ProjectBulkActionConfirm
+            confirm={bulkConfirm}
+            loading={bulkActionLoading}
+            onCancel={() => setBulkConfirm(null)}
+            onConfirm={() => void handleBulkProjectAction(bulkConfirm)}
+          />
+        )}
 
         {/* Delete Project Confirmation Modal */}
         {deleteConfirm && (

@@ -590,6 +590,9 @@ pub(crate) fn allowed_project_roots() -> Vec<std::path::PathBuf> {
 /// project. Prevents path traversal where the frontend could pass arbitrary paths.
 pub fn validate_project_path(project_path: &str) -> Result<std::path::PathBuf, String> {
     let path = std::path::Path::new(project_path);
+    if !path.is_absolute() {
+        return Err("Security error: project path must be absolute".to_string());
+    }
     let canonical = dunce::canonicalize(path).map_err(|e| format!("Invalid path: {e}"))?;
 
     // Allow paths inside any allowed projects root
