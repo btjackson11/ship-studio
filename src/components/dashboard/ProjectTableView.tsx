@@ -81,15 +81,17 @@ export function ProjectTableView<TProject extends DashboardProject>({
   return (
     <div className="project-table" role="table" aria-label="Projects">
       <div className="project-table-row project-table-header" role="row">
-        <label className="project-table-select-cell" aria-label="Select all visible projects">
-          <input
-            ref={selectAllRef}
-            type="checkbox"
-            checked={allVisibleSelected}
-            disabled={projects.length === 0}
-            onChange={(event) => onSelectAllVisible(event.target.checked)}
-          />
-        </label>
+        <div className="project-table-select-cell" role="columnheader">
+          <label aria-label="Select all visible projects">
+            <input
+              ref={selectAllRef}
+              type="checkbox"
+              checked={allVisibleSelected}
+              disabled={projects.length === 0}
+              onChange={(event) => onSelectAllVisible(event.target.checked)}
+            />
+          </label>
+        </div>
         <span className="project-table-heading" role="columnheader">
           Name
         </span>
@@ -105,7 +107,11 @@ export function ProjectTableView<TProject extends DashboardProject>({
         >
           Last Opened
         </span>
-        <span aria-hidden="true" />
+        <span
+          className="project-table-heading project-table-actions-heading"
+          role="columnheader"
+          aria-label="Actions"
+        />
       </div>
 
       {projects.map((project) => {
@@ -118,37 +124,41 @@ export function ProjectTableView<TProject extends DashboardProject>({
             className={`project-table-row ${isSelected ? 'is-selected' : ''}`}
             role="row"
           >
-            <label
-              className="project-table-select-cell"
-              aria-label={`Select ${project.name}`}
-              title={`Select ${project.name}`}
-            >
-              <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={() => onToggleProjectSelection(project.path)}
-              />
-            </label>
+            <div className="project-table-select-cell" role="cell">
+              <label aria-label={`Select ${project.name}`} title={`Select ${project.name}`}>
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => onToggleProjectSelection(project.path)}
+                />
+              </label>
+            </div>
 
-            <button
-              type="button"
-              className="project-table-open"
-              onClick={() => onSelectProject(project)}
-              title={`Open ${project.name}`}
-            >
-              <span className="project-table-name-stack">
-                <span className="project-table-name-line">
-                  <span className="project-table-name">{project.name}</span>
-                  {project.workspace_subpath && (
-                    <span className="project-table-workspace" title={project.workspace_subpath}>
-                      {project.workspace_subpath}
-                    </span>
-                  )}
+            <div className="project-table-name-cell" role="cell">
+              <button
+                type="button"
+                className="project-table-open"
+                onClick={() => onSelectProject(project)}
+                title={`Open ${project.name}`}
+              >
+                <span className="project-table-name-stack">
+                  <span className="project-table-name-line">
+                    <span className="project-table-name">{project.name}</span>
+                    {project.workspace_subpath && (
+                      <span className="project-table-workspace" title={project.workspace_subpath}>
+                        {project.workspace_subpath}
+                      </span>
+                    )}
+                  </span>
                 </span>
-              </span>
-            </button>
+              </button>
+            </div>
 
-            <span className="project-table-branch" title={project.git_branch ?? 'No branch'}>
+            <span
+              className="project-table-branch project-table-branch-cell"
+              role="cell"
+              title={project.git_branch ?? 'No branch'}
+            >
               {project.git_branch ? (
                 <>
                   <BranchIcon />
@@ -160,35 +170,43 @@ export function ProjectTableView<TProject extends DashboardProject>({
             </span>
 
             <span
+              role="cell"
               className={
                 project.uncommitted_count && project.uncommitted_count > 0
-                  ? 'project-table-changes has-changes'
-                  : 'project-table-changes'
+                  ? 'project-table-changes project-table-changes-cell has-changes'
+                  : 'project-table-changes project-table-changes-cell'
               }
             >
               {formatChanges(project.uncommitted_count)}
             </span>
 
-            <span className="project-table-muted project-table-last-opened">
+            <span
+              role="cell"
+              className="project-table-muted project-table-last-opened project-table-last-opened-cell"
+            >
               {formatLastOpened(project.last_opened)}
             </span>
 
-            <ProjectCardMenu
-              hideMainBranchWarning={hideMainBranchWarning}
-              onToggleMainBranchWarning={(hidden) =>
-                onToggleMainBranchWarning(project.path, hidden)
-              }
-              onRename={project.is_external ? undefined : () => onRenameProject(project)}
-              onMoveToFolder={() => onOpenMoveModal(project)}
-              onMoveToWorkspace={() => onOpenMoveWorkspaceModal(project)}
-              onExportAsTemplate={() => onExportAsTemplate(project.path)}
-              onUploadThumbnail={() => onUploadThumbnail(project)}
-              onDelete={() => onDeleteProject(project)}
-              isExternal={project.is_external}
-              onRemove={() => onRemoveProject(project)}
-              isPinned={pinnedSet?.has(project.path) ?? false}
-              onTogglePin={onTogglePin ? (pinned) => onTogglePin(project.path, pinned) : undefined}
-            />
+            <div className="project-table-actions-cell" role="cell">
+              <ProjectCardMenu
+                hideMainBranchWarning={hideMainBranchWarning}
+                onToggleMainBranchWarning={(hidden) =>
+                  onToggleMainBranchWarning(project.path, hidden)
+                }
+                onRename={project.is_external ? undefined : () => onRenameProject(project)}
+                onMoveToFolder={() => onOpenMoveModal(project)}
+                onMoveToWorkspace={() => onOpenMoveWorkspaceModal(project)}
+                onExportAsTemplate={() => onExportAsTemplate(project.path)}
+                onUploadThumbnail={() => onUploadThumbnail(project)}
+                onDelete={() => onDeleteProject(project)}
+                isExternal={project.is_external}
+                onRemove={() => onRemoveProject(project)}
+                isPinned={pinnedSet?.has(project.path) ?? false}
+                onTogglePin={
+                  onTogglePin ? (pinned) => onTogglePin(project.path, pinned) : undefined
+                }
+              />
+            </div>
           </div>
         );
       })}

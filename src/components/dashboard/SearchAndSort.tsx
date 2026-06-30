@@ -57,26 +57,30 @@ export function SearchAndSort({
       </div>
       <div className="dashboard-section-controls">
         <div className="dashboard-view-toggle" role="group" aria-label="Project view">
-          <button
-            type="button"
-            className={`dashboard-view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
+          <Button
+            variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="dashboard-view-toggle-btn"
             aria-pressed={viewMode === 'grid'}
+            aria-label="Grid view"
             title="Grid view"
             onClick={() => onViewModeChange('grid')}
           >
             <GridIcon size={14} />
             <span className="dashboard-view-toggle-label">Grid</span>
-          </button>
-          <button
-            type="button"
-            className={`dashboard-view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
+          </Button>
+          <Button
+            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="dashboard-view-toggle-btn"
             aria-pressed={viewMode === 'list'}
+            aria-label="List view"
             title="List view"
             onClick={() => onViewModeChange('list')}
           >
             <ListIcon size={14} />
             <span className="dashboard-view-toggle-label">List</span>
-          </button>
+          </Button>
         </div>
         <Dropdown
           align="right"

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DashboardProject } from '../lib/project';
 import { deleteProject, removeProjectFromApp } from '../lib/project';
 import { asCommandError, formatCommandError } from '../lib/errors';
@@ -67,6 +67,39 @@ export function useProjectBulkActions<T extends DashboardProject>({
     () => new Set([...selectedProjectPaths].filter((path) => visibleProjectPathSet.has(path))),
     [selectedProjectPaths, visibleProjectPathSet]
   );
+
+  useEffect(() => {
+    const hasHiddenSelection = [...selectedProjectPaths].some(
+      (path) => !visibleProjectPathSet.has(path)
+    );
+
+    if (!hasHiddenSelection) return;
+
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+
+      setSelectedProjectPaths((prev) => {
+        let changed = false;
+        const next = new Set<string>();
+
+        for (const path of prev) {
+          if (visibleProjectPathSet.has(path)) {
+            next.add(path);
+          } else {
+            changed = true;
+          }
+        }
+
+        return changed ? next : prev;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectPaths, visibleProjectPathSet]);
 
   const selectedProjects = useMemo(
     () => filteredProjects.filter((project) => visibleSelectedProjectPaths.has(project.path)),
@@ -158,9 +191,6 @@ export function useProjectBulkActions<T extends DashboardProject>({
             await removeProjectFromApp(project.path);
           }
 
-          if (pinnedSet?.has(project.path)) {
-            await onTogglePin?.(project.path, false);
-          }
           completed += 1;
         } catch (error) {
           failures.push({ project, error });
@@ -174,6 +204,20 @@ export function useProjectBulkActions<T extends DashboardProject>({
             projectName: project.name,
             error: error instanceof Error ? error.message : String(error),
           });
+          continue;
+        }
+
+        if (pinnedSet?.has(project.path) && onTogglePin) {
+          try {
+            await onTogglePin(project.path, false);
+          } catch (error) {
+            trackError('project_bulk_unpin_after_action', error, 'Dashboard');
+            logger.error('Failed to unpin project after successful bulk action', {
+              action: confirm.action,
+              projectName: project.name,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
         }
       }
 

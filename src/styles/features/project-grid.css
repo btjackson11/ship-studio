@@ -87,6 +87,10 @@
   width: var(--project-table-select-w);
 }
 
+.project-table-name-cell {
+  min-width: 0;
+}
+
 .project-table-select-cell input[type='checkbox'] {
   width: var(--spacing-lg);
   height: var(--spacing-lg);
@@ -187,7 +191,7 @@
   color: var(--text-muted);
 }
 
-.project-table-row > .project-card-menu-container {
+.project-table-actions-cell {
   justify-self: end;
 }
 

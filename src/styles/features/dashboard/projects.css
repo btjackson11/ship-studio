@@ -72,7 +72,7 @@
 
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .dashboard-view-toggle {
@@ -111,7 +111,7 @@
   color: var(--text-secondary);
 }
 
-.dashboard-view-toggle-btn.active {
+.dashboard-view-toggle-btn[aria-pressed='true'] {
   background: var(--bg-tertiary);
   border-color: var(--border);
   color: var(--text-primary);

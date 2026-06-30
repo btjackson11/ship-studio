@@ -6,6 +6,7 @@
 
 import { trackEvent } from '../../lib/analytics';
 import { ChevronRightIcon, HistoryIcon, SettingsIcon } from '../icons';
+import { Button } from '../primitives/Button';
 
 interface DashboardPreferencesCardProps {
   onOpenSettings: () => void;
@@ -29,8 +30,8 @@ export function DashboardPreferencesCard({
         </div>
       </header>
       <div className="dashboard-card-rows">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           className="dashboard-card-row"
           data-education-id="settings-button"
           onClick={() => {
@@ -48,9 +49,9 @@ export function DashboardPreferencesCard({
             </div>
           </div>
           <ChevronRightIcon size={14} />
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="ghost"
           className="dashboard-card-row"
           onClick={() => {
             void trackEvent('changelog_opened', { $screen_name: 'Dashboard' });
@@ -67,7 +68,7 @@ export function DashboardPreferencesCard({
             </div>
           </div>
           <ChevronRightIcon size={14} />
-        </button>
+        </Button>
       </div>
     </section>
   );

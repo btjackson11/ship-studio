@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DashboardProject } from '../lib/project';
 import { deleteProject, removeProjectFromApp } from '../lib/project';
+import { trackError } from '../lib/analytics';
 import {
   describeProjectSelection,
   projectCountLabel,
@@ -44,6 +45,7 @@ function makeProject(overrides: Partial<DashboardProject> = {}): DashboardProjec
 describe('useProjectBulkActions', () => {
   const removeProjectFromAppMock = vi.mocked(removeProjectFromApp);
   const deleteProjectMock = vi.mocked(deleteProject);
+  const trackErrorMock = vi.mocked(trackError);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -98,6 +100,14 @@ describe('useProjectBulkActions', () => {
     });
     expect(result.current.selectedProjectPaths.has(beta.path)).toBe(true);
     expect(result.current.selectedProjectPaths.has(alpha.path)).toBe(false);
+
+    rerender({ projects: [alpha, beta] });
+
+    await waitFor(() => {
+      expect(result.current.selectedCount).toBe(1);
+    });
+    expect(result.current.selectedProjectPaths.has(beta.path)).toBe(true);
+    expect(result.current.selectedProjectPaths.has(alpha.path)).toBe(false);
   });
 
   it('removes selected projects from Ship Studio and unpins pinned projects', async () => {
@@ -138,6 +148,51 @@ describe('useProjectBulkActions', () => {
     expect(loadAll).toHaveBeenCalledTimes(1);
     expect(showToast).toHaveBeenCalledWith('Removed 2 projects', 'success');
     expect(result.current.selectedCount).toBe(0);
+  });
+
+  it('counts successful removals even when optional unpin cleanup fails', async () => {
+    const alpha = makeProject({ name: 'Alpha' });
+    const loadAll = vi.fn().mockResolvedValue(undefined);
+    const showToast = vi.fn();
+    const onTogglePin = vi.fn().mockRejectedValue(new Error('pin write failed'));
+
+    const { result } = renderHook(() =>
+      useProjectBulkActions({
+        filteredProjects: [alpha],
+        pinnedSet: new Set([alpha.path]),
+        onTogglePin,
+        loadAll,
+        showToast,
+      })
+    );
+
+    act(() => {
+      result.current.handleToggleProjectSelection(alpha.path);
+    });
+    act(() => {
+      result.current.handleBeginBulkProjectAction('remove');
+    });
+
+    const confirm = result.current.bulkConfirm;
+    expect(confirm).not.toBeNull();
+
+    await act(async () => {
+      await result.current.handleBulkProjectAction(confirm!);
+    });
+
+    expect(removeProjectFromAppMock).toHaveBeenCalledWith(alpha.path);
+    expect(onTogglePin).toHaveBeenCalledWith(alpha.path, false);
+    expect(loadAll).toHaveBeenCalledTimes(1);
+    expect(showToast).toHaveBeenCalledWith('Removed 1 project', 'success');
+    expect(showToast).not.toHaveBeenCalledWith(
+      expect.stringContaining('Failed to remove'),
+      'error'
+    );
+    expect(trackErrorMock).toHaveBeenCalledWith(
+      'project_bulk_unpin_after_action',
+      expect.any(Error),
+      'Dashboard'
+    );
   });
 
   it('blocks deleting external projects from the bulk action bar', () => {
